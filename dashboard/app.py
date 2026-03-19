@@ -252,6 +252,10 @@ def main():
 
     result = run_pipeline()
 
+    # Export button in sidebar
+    from dashboard.components.export import render_export_button
+    render_export_button(result)
+
     prices_last = result["prices"].index[-1].strftime("%Y-%m-%d")
     st.caption(
         f"Pipeline: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} | "
