@@ -303,10 +303,14 @@ def main():
     with tab2:
         from dashboard.components.sector_table import render_sector_table
         render_sector_table(result)
+        from dashboard.components.performance_spectrum import render_sector_spectrum
+        render_sector_spectrum(result)
 
     with tab3:
         from dashboard.components.industry_panel import render_industry_panel
         render_industry_panel(result)
+        from dashboard.components.performance_spectrum import render_industry_spectrum
+        render_industry_spectrum(result)
 
     with tab4:
         from dashboard.components.breadth_chart import render_breadth_chart
