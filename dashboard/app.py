@@ -244,8 +244,9 @@ def main():
     result = run_pipeline()
 
     # Tab layout
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-        "Regime Gate", "Sector Rankings", "Industries", "Breadth", "Today", "Replay", "Debug"
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+        "Regime Gate", "Sector Rankings", "Industries", "Breadth",
+        "Today", "Signal Reliability", "Replay", "Debug",
     ])
 
     with tab1:
@@ -274,10 +275,14 @@ def main():
         render_interpretation_panel(result)
 
     with tab6:
+        from dashboard.components.signal_reliability import render_signal_reliability
+        render_signal_reliability(result)
+
+    with tab7:
         from dashboard.components.replay_panel import render_replay_panel
         render_replay_panel(result)
 
-    with tab7:
+    with tab8:
         from dashboard.components.debug_panel import render_debug_panel
         render_debug_panel(result)
 
