@@ -29,7 +29,9 @@ _SECTOR_NAMES = {
 def render_export_button(result: dict):
     st.sidebar.markdown("---")
     st.sidebar.subheader("Export Report")
-    fmt = st.sidebar.selectbox("Format", ["Claude XML", "Markdown", "CSV", "JSON"], key="export_fmt")
+    fmt = st.sidebar.selectbox("Format",
+                               ["Claude XML", "Markdown", "CSV", "JSON", "ZIP (HTML pages)"],
+                               key="export_fmt")
 
     if st.sidebar.button("Generate Export", key="export_btn"):
         now = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M")
@@ -49,6 +51,10 @@ def render_export_button(result: dict):
             content = _build_json(result)
             st.sidebar.download_button("Download JSON", content, f"pump_report_{now}.json",
                                         mime="application/json", key="dl_json")
+        elif fmt == "ZIP (HTML pages)":
+            content = _build_zip_html(result)
+            st.sidebar.download_button("Download ZIP", content, f"pump_report_{now}.zip",
+                                        mime="application/zip", key="dl_zip")
 
 
 # ═══════════════════════════════════════════════════════
@@ -414,6 +420,22 @@ def _build_claude_xml(result: dict) -> str:
                      f'state="{sv}"/>')
         L.append('  </reversal_diagnostics>')
 
+    # Signal Reliability
+    reliability = _get_signal_reliability(result)
+    if reliability:
+        L.append('  <signal_reliability description="Hit rate of past state calls vs actual forward RS. '
+                 'Bullish states (Overt Pump, Accumulation) expect positive RS. '
+                 'Bearish states (Exhaustion, Overt Dump) expect negative RS.">')
+        for period, data in reliability.items():
+            L.append(f'    <lookback period="{period}" snap_date="{data["snap_date"]}" '
+                     f'hits="{data["hits"]}" total="{data["total"]}" '
+                     f'hit_rate="{data["hit_rate"]:.0%}">')
+            for d in data["details"]:
+                L.append(f'      <signal ticker="{d["ticker"]}" state_then="{d["state_then"]}" '
+                         f'fwd_rs="{d["fwd_rs"]:.4f}" verdict="{d["verdict"]}"/>')
+            L.append(f'    </lookback>')
+        L.append('  </signal_reliability>')
+
     L.append('</pump_rotation_report>')
     return "\n".join(L)
 
@@ -571,6 +593,27 @@ def _build_markdown(result: dict) -> str:
         bar = "█" * max(1, int(r.rs_composite / 5))
         L.append(f"- {r.ticker} ({r.name}): {bar} {r.rs_composite:.0f} [{sv}]")
     L.append("")
+
+    # Signal Reliability
+    reliability = _get_signal_reliability(result)
+    if reliability:
+        L.append("## Signal Reliability")
+        L.append("")
+        L.append("| Lookback | Snap Date | Signals | Hits | Hit Rate |")
+        L.append("|----------|-----------|---------|------|----------|")
+        for period, data in reliability.items():
+            L.append(f"| {period} | {data['snap_date']} | {data['total']} | {data['hits']} | {data['hit_rate']:.0%} |")
+        L.append("")
+        # Detail for 1d
+        if "1d" in reliability:
+            d1 = reliability["1d"]
+            L.append(f"### 1d Detail ({d1['snap_date']})")
+            L.append("")
+            L.append("| Sector | State (then) | Fwd RS | Verdict |")
+            L.append("|--------|-------------|--------|---------|")
+            for d in d1["details"]:
+                L.append(f"| {d['ticker']} | {d['state_then']} | {d['fwd_rs']:+.2%} | {d['verdict']} |")
+            L.append("")
 
     return "\n".join(L)
 
@@ -740,7 +783,223 @@ def _build_json(result: dict) -> str:
             "state": state.state.value if state else None,
         })
 
+    # Signal reliability
+    reliability = _get_signal_reliability(result)
+    data["signal_reliability"] = {}
+    for period, rd in reliability.items():
+        data["signal_reliability"][period] = {
+            "snap_date": rd["snap_date"], "hits": rd["hits"], "total": rd["total"],
+            "hit_rate": rd["hit_rate"],
+            "details": rd["details"],
+        }
+
     return json.dumps(data, indent=2, default=str)
+
+
+# ═══════════════════════════════════════════════════════
+# ZIP (HTML pages — one per dashboard tab)
+# ═══════════════════════════════════════════════════════
+
+def _build_zip_html(result: dict) -> bytes:
+    """Build a ZIP file containing one HTML page per dashboard tab."""
+    import zipfile
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("01_regime_gate.html", _html_page("Regime Gate", _html_regime(result)))
+        zf.writestr("02_sector_rankings.html", _html_page("Sector Rankings", _html_sectors(result)))
+        zf.writestr("03_industries.html", _html_page("Industries", _html_industries(result)))
+        zf.writestr("04_breadth.html", _html_page("Breadth", _html_breadth(result)))
+        zf.writestr("05_today.html", _html_page("Today's Interpretation", _html_today(result)))
+        zf.writestr("06_signal_reliability.html", _html_page("Signal Reliability", _html_reliability(result)))
+        zf.writestr("07_reversal_diagnostics.html", _html_page("Reversal Diagnostics", _html_reversal(result)))
+        zf.writestr("08_debug.html", _html_page("Debug Data", _html_debug(result)))
+    buf.seek(0)
+    return buf.getvalue()
+
+
+def _html_page(title: str, body: str) -> str:
+    """Wrap body in a styled HTML page."""
+    return f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>{title} — Pump Rotation System</title>
+<style>
+body {{ font-family: -apple-system, 'Segoe UI', sans-serif; background: #0e1117; color: #fafafa; padding: 20px; max-width: 1200px; margin: 0 auto; }}
+h1 {{ color: #00d4aa; }} h2 {{ color: #94a3b8; border-bottom: 1px solid #333; padding-bottom: 4px; }}
+table {{ border-collapse: collapse; width: 100%; margin: 12px 0; }}
+th, td {{ padding: 6px 10px; border: 1px solid #333; text-align: left; font-size: 13px; }}
+th {{ background: #1e293b; color: #94a3b8; }}
+.green {{ color: #22c55e; }} .red {{ color: #ef4444; }} .orange {{ color: #f97316; }} .gray {{ color: #64748b; }}
+.badge {{ display: inline-block; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; }}
+.bg-green {{ background: #064e3b; color: #34d399; }}
+.bg-red {{ background: #7f1d1d; color: #f87171; }}
+.bg-orange {{ background: #7c2d12; color: #fb923c; }}
+.bg-deep-green {{ background: #052e16; color: #22c55e; }}
+pre {{ background: #1e293b; padding: 10px; border-radius: 4px; overflow-x: auto; }}
+</style></head><body>
+<h1>{title}</h1>
+{body}
+<hr><p style="color:#64748b;font-size:11px;">Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} | Pump Rotation System</p>
+</body></html>"""
+
+
+def _state_badge(state_val: str) -> str:
+    css = {"Overt Pump": "bg-deep-green", "Accumulation": "bg-green",
+           "Exhaustion": "bg-orange", "Overt Dump": "bg-red"}.get(state_val, "")
+    return f'<span class="badge {css}">{state_val}</span>'
+
+
+def _html_table(headers: list, rows: list[list]) -> str:
+    h = "".join(f"<th>{h}</th>" for h in headers)
+    body = ""
+    for row in rows:
+        cells = "".join(f"<td>{c}</td>" for c in row)
+        body += f"<tr>{cells}</tr>"
+    return f"<table><tr>{h}</tr>{body}</table>"
+
+
+def _html_regime(result: dict) -> str:
+    regime = result["regime"]
+    vix = result.get("vix")
+    parts = [f"<h2>State: <span class='{'green' if regime.state.value=='NORMAL' else 'orange' if regime.state.value=='FRAGILE' else 'red'}'>"
+             f"{regime.state.value}</span></h2>"]
+    parts.append(f"<p>{regime.explanation}</p>")
+    rows = [[s.name, f"{s.raw_value:.2f}", f"<span class='{'green' if s.level.value=='NORMAL' else 'orange' if s.level.value=='FRAGILE' else 'red'}'>{s.level.value}</span>"]
+            for s in regime.signals]
+    parts.append(_html_table(["Signal", "Value", "Level"], rows))
+    if vix is not None and len(vix) >= 2:
+        parts.append(f"<p>VIX: {vix.iloc[-1]:.1f} (1d: {vix.iloc[-1]-vix.iloc[-2]:+.1f})</p>")
+    breadth = result.get("breadth")
+    if breadth:
+        parts.append(f"<h2>Breadth: {breadth.signal.value}</h2>")
+        parts.append(f"<p>RSP/SPY: {breadth.rsp_spy_ratio:.4f}, z-score: {breadth.rsp_spy_ratio_zscore:.2f}</p>")
+    return "\n".join(parts)
+
+
+def _html_sectors(result: dict) -> str:
+    rs = sorted(result.get("rs_readings", []), key=lambda r: r.rs_rank)
+    states = result.get("states", {})
+    pumps = result.get("pumps", {})
+    rev_map = {rv.ticker: rv for rv in result.get("reversal_scores", [])}
+    prices = result["prices"]
+
+    rows = []
+    for r in rs:
+        st = states.get(r.ticker)
+        p = pumps.get(r.ticker)
+        rv = rev_map.get(r.ticker)
+        trend = _trend_description(prices, r.ticker)
+        rows.append([
+            f"#{r.rs_rank}", f"{r.ticker} ({r.name})", trend,
+            f"{r.rs_5d:+.2%}", f"{r.rs_20d:+.2%}", f"{r.rs_60d:+.2%}",
+            f"{r.rs_composite:.0f}",
+            f"{p.pump_score:.2f}" if p else "—", f"{p.pump_delta:+.3f}" if p else "—",
+            f"{rv.reversal_score:.2f}" if rv else "—",
+            _state_badge(st.state.value) if st else "—", f"{st.confidence}%" if st else "—",
+        ])
+    return _html_table(["Rank", "Sector", "20d Trend", "RS 5d", "RS 20d", "RS 60d",
+                         "Comp", "Pump", "Delta", "Rev", "State", "Conf"], rows)
+
+
+def _html_industries(result: dict) -> str:
+    irs = sorted(result.get("industry_rs", []), key=lambda x: x.rs_rank)
+    states = result.get("states", {})
+    if not irs:
+        return "<p>No industry data.</p>"
+    rows = []
+    for ir in irs:
+        st = states.get(ir.ticker)
+        ps = states.get(ir.parent_sector)
+        rows.append([
+            f"#{ir.rs_rank}", f"{ir.ticker} ({ir.name})", ir.parent_sector,
+            f"{ir.rs_5d:+.2%}", f"{ir.rs_20d:+.2%}", f"{ir.rs_60d:+.2%}",
+            f"{ir.rs_20d_vs_parent:+.2%}", f"{ir.industry_composite:.0f}",
+            _state_badge(st.state.value) if st else "—",
+            _state_badge(ps.state.value) if ps else "—",
+        ])
+    return _html_table(["Rank", "Industry", "Parent", "RS 5d", "RS 20d", "RS 60d",
+                         "vs Parent", "Comp", "State", "Parent State"], rows)
+
+
+def _html_breadth(result: dict) -> str:
+    b = result.get("breadth")
+    if not b:
+        return "<p>No breadth data.</p>"
+    z = f"{b.rsp_spy_ratio_zscore:.2f}" if not math.isnan(b.rsp_spy_ratio_zscore) else "N/A"
+    return (f"<h2>Signal: {b.signal.value}</h2>"
+            f"<p>RSP/SPY: {b.rsp_spy_ratio:.4f} | 20d change: {b.rsp_spy_ratio_20d_change:+.4f} | z-score: {z}</p>"
+            f"<p><em>Chart: RSP/SPY ratio 60-day trend with 20d MA overlay.</em></p>")
+
+
+def _html_today(result: dict) -> str:
+    spy_1d, moves = _get_1d_moves(result)
+    leaders = _get_rolling_moves(result)
+    batons = _get_baton_passes(result)
+    parts = [f"<h2>SPY: {spy_1d:+.2%}</h2>"]
+    rows = [[f"{m['ticker']} ({m['name']})", f"{m['return_1d']:+.2%}",
+             f"<span class='{'green' if m['rs_1d']>0.001 else 'red' if m['rs_1d']<-0.001 else 'gray'}'>"
+             f"{m['rs_1d']:+.2%}</span>"]
+            for m in sorted(moves, key=lambda x: x["rs_1d"], reverse=True)]
+    parts.append(_html_table(["Sector", "Return", "RS vs SPY"], rows))
+    if leaders:
+        parts.append("<h2>Rolling RS Leaders</h2><ul>")
+        for lb, (t, n, v) in leaders.items():
+            parts.append(f"<li><strong>{lb}</strong>: {t} ({n}) {v:+.2%}</li>")
+        parts.append("</ul>")
+    if batons:
+        parts.append("<h2>Baton Pass Alerts</h2><ul>")
+        for a in batons:
+            parts.append(f"<li>{a}</li>")
+        parts.append("</ul>")
+    return "\n".join(parts)
+
+
+def _html_reliability(result: dict) -> str:
+    rel = _get_signal_reliability(result)
+    if not rel:
+        return "<p>Insufficient snapshots for reliability analysis.</p>"
+    parts = ["<h2>Hit Rate by Lookback</h2>"]
+    summary_rows = []
+    for period, data in rel.items():
+        rate = data["hit_rate"]
+        color = "green" if rate >= 0.6 else "red" if rate < 0.4 else "gray"
+        summary_rows.append([period, data["snap_date"], str(data["total"]), str(data["hits"]),
+                             f"<span class='{color}'>{rate:.0%}</span>"])
+    parts.append(_html_table(["Period", "Snap Date", "Signals", "Hits", "Hit Rate"], summary_rows))
+    for period, data in rel.items():
+        parts.append(f"<h2>{period} Detail ({data['snap_date']})</h2>")
+        rows = [[d["ticker"], d["state_then"],
+                 f"<span class='{'green' if d['fwd_rs']>0 else 'red'}'>{d['fwd_rs']:+.2%}</span>",
+                 f"<span class='{'green' if d['verdict']=='HIT' else 'red'}'>{d['verdict']}</span>"]
+                for d in data["details"]]
+        parts.append(_html_table(["Sector", "State (then)", "Fwd RS", "Verdict"], rows))
+    return "\n".join(parts)
+
+
+def _html_reversal(result: dict) -> str:
+    revs = sorted(result.get("reversal_scores", []), key=lambda x: x.reversal_score, reverse=True)[:5]
+    states = result.get("states", {})
+    if not revs:
+        return "<p>No reversal data.</p>"
+    rows = []
+    for rv in revs:
+        st = states.get(rv.ticker)
+        subs = rv.sub_signals
+        rows.append([
+            rv.ticker, f"{rv.reversal_score:.2f}", f"{rv.reversal_percentile:.0f}%",
+            f"{rv.breadth_det_pillar:.0f}", f"{rv.price_break_pillar:.0f}", f"{rv.crowding_pillar:.0f}",
+            f"{subs.get('clv_trend',0):.2f}", f"{subs.get('rvol',1):.1f}x",
+            _state_badge(st.state.value) if st else "—",
+        ])
+    return _html_table(["Group", "Rev Score", "%ile", "BreadthDet", "PriceBreak", "Crowding",
+                         "CLV", "RVOL", "State"], rows)
+
+
+def _html_debug(result: dict) -> str:
+    parts = ["<h2>Raw Regime Signals</h2>"]
+    parts.append(f"<pre>{result['regime'].explanation}</pre>")
+    parts.append("<h2>Price Data (last 3 rows)</h2>")
+    parts.append(f"<pre>{result['prices'].tail(3).to_string()}</pre>")
+    return "\n".join(parts)
 
 
 def _xml_escape(s: str) -> str:
