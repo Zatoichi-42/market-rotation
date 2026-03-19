@@ -40,38 +40,55 @@ def render_replay_panel(result: dict):
     # ── Navigation ────────────────────────────────────
     max_idx = len(available) - 1
 
-    # Use a separate key for the actual index to avoid slider-button conflicts
-    if "rp_idx" not in st.session_state:
-        st.session_state.rp_idx = max_idx
-    if "rp_step_size" not in st.session_state:
-        st.session_state.rp_step_size = 1
+    # Initialize
+    if "rp_pos" not in st.session_state:
+        st.session_state.rp_pos = max_idx
 
-    step_col, nav_l, nav_r = st.columns([2, 1, 1])
+    step_map = {"1 day": 1, "5 days": 5, "20 days": 20, "60 days": 60}
+
+    # Buttons use on_click to modify rp_pos BEFORE widgets render
+    def _back():
+        s = step_map.get(st.session_state.get("rp_step_sel2", "1 day"), 1)
+        st.session_state.rp_pos = max(0, st.session_state.rp_pos - s)
+
+    def _fwd():
+        s = step_map.get(st.session_state.get("rp_step_sel2", "1 day"), 1)
+        st.session_state.rp_pos = min(max_idx, st.session_state.rp_pos + s)
+
+    # Jump to date callback
+    def _go_to_date():
+        target = str(st.session_state.get("rp_date_input", ""))
+        if target in available:
+            st.session_state.rp_pos = available.index(target)
+        else:
+            # Find nearest available date
+            for i, d in enumerate(available):
+                if d >= target:
+                    st.session_state.rp_pos = i
+                    return
+            st.session_state.rp_pos = max_idx  # Past all dates → go to last
+
+    step_col, nav_l, nav_r, date_col, go_col = st.columns([1.5, 1, 1, 2, 0.5])
     with step_col:
-        step_map = {"1 day": 1, "5 days": 5, "20 days": 20, "60 days": 60}
-        step_label = st.selectbox("Step size", list(step_map.keys()), index=0, key="rp_step_select")
-        st.session_state.rp_step_size = step_map[step_label]
-
-    def _prev_click():
-        s = st.session_state.rp_step_size
-        st.session_state.rp_idx = max(0, st.session_state.rp_idx - s)
-
-    def _next_click():
-        s = st.session_state.rp_step_size
-        st.session_state.rp_idx = min(max_idx, st.session_state.rp_idx + s)
-
+        st.selectbox("Step", list(step_map.keys()), index=0, key="rp_step_sel2")
     with nav_l:
-        st.button("◄ Back", on_click=_prev_click, key="rp_back_btn")
+        st.button("◄ Back", on_click=_back, key="rp_back5")
     with nav_r:
-        st.button("Forward ►", on_click=_next_click, key="rp_fwd_btn")
+        st.button("Forward ►", on_click=_fwd, key="rp_fwd5")
+    with date_col:
+        from datetime import date as dt_date
+        min_date = dt_date.fromisoformat(available[0])
+        max_date = dt_date.fromisoformat(available[-1])
+        default_date = dt_date.fromisoformat(available[st.session_state.rp_pos])
+        st.date_input("Go to date", value=default_date, min_value=min_date, max_value=max_date, key="rp_date_input")
+    with go_col:
+        st.markdown("<br>", unsafe_allow_html=True)  # Vertical align
+        st.button("Go", on_click=_go_to_date, key="rp_go_btn")
 
-    # Number input for direct index control (avoids slider widget key conflicts)
-    new_idx = st.slider("Timeline", 0, max_idx, value=st.session_state.rp_idx, key="rp_timeline_slider")
-    if new_idx != st.session_state.rp_idx:
-        st.session_state.rp_idx = new_idx
-
-    sel_date = available[st.session_state.rp_idx]
-    st.markdown(f"**{sel_date}** &nbsp; ({available[0]} → {available[-1]}, {len(available)} snapshots)")
+    current_idx = st.session_state.rp_pos
+    sel_date = available[current_idx]
+    st.markdown(f"**{sel_date}** &nbsp; (#{current_idx} of {len(available)} | "
+                f"{available[0]} → {available[-1]})")
 
     try:
         snap = load_snapshot(sel_date)
@@ -165,7 +182,7 @@ def render_replay_panel(result: dict):
 
     # ── Rolling 1d / 5d / 20d / 60d Metrics ──────────
     st.subheader("Rolling Period Metrics")
-    prev_idx = st.session_state.rp_idx - 1
+    prev_idx = current_idx - 1
     if prev_idx >= 0 and sel_date in date_strs:
         dloc = prices.index.get_indexer(pd.to_datetime([sel_date]), method="nearest")[0]
 

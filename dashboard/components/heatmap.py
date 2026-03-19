@@ -94,14 +94,14 @@ def make_rs_heatmap(
         zmid=0,
         zmin=-max_abs,
         zmax=max_abs,
-        colorbar=dict(title="RS (%)", ticksuffix="%"),
+        showscale=False,  # Hide colorbar — values shown as text in cells
         hovertemplate="<b>%{y}</b><br>%{x}: %{text}<extra></extra>",
     ))
 
     # Add State annotations on the right side
     for i, state in enumerate(states):
         fig.add_annotation(
-            x=1.02, y=labels[i],
+            x=1.01, y=labels[i],
             xref="paper", yref="y",
             text=state,
             showarrow=False,
