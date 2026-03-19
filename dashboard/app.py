@@ -19,6 +19,7 @@ from engine.rs_scanner import compute_rs_readings, compute_rs_all
 from engine.breadth import compute_breadth
 from engine.normalizer import compute_zscore, percentile_rank
 from engine.industry_rs import compute_industry_rs
+from engine.industry_state import classify_all_industries
 from engine.reversal_score import compute_reversal_scores_batch
 from engine.pump_score import compute_pump_score
 from engine.state_classifier import classify_all_sectors
@@ -217,6 +218,13 @@ def run_pipeline():
         reversal_scores=reversal_map,
     )
 
+    # Industry states from multi-timeframe RS pattern
+    industry_states = classify_all_industries(
+        industry_rs_readings, regime=regime.state, reversal_scores=reversal_map,
+    )
+    # Merge industry states into the main states dict
+    states.update(industry_states)
+
     return {
         "regime": regime,
         "rs_readings": rs_readings,
@@ -233,6 +241,7 @@ def run_pipeline():
         "credit": credit,
         "fred_hy_oas": data.get("fred_hy_oas"),
         "industry_rs": industry_rs_readings,
+        "industry_states": industry_states,
         "reversal_scores": reversal_readings,
         "reversal_map": reversal_map,
     }

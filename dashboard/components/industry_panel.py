@@ -86,10 +86,15 @@ def render_industry_panel(result: dict):
             if not s.empty:
                 spark = make_sparkline_unicode(s, width=12)
 
+        # Parent sector state
+        parent_state = state_map.get(r.parent_sector)
+        parent_state_val = parent_state.state.value if parent_state else "—"
+
         if is_rs:
             row = {"Rank": r.rs_rank, "Industry": f"{r.ticker} ({r.name})",
                    "Parent": _parent_label(r.parent_sector), "20d Trend": spark,
-                   "RS vs SPY": f"{r.rs_20d:+.2%}", "RS vs Parent": f"{vs_icon} {r.rs_20d_vs_parent:+.2%}",
+                   "RS 5d": f"{r.rs_5d:+.2%}", "RS 20d": f"{r.rs_20d:+.2%}", "RS 60d": f"{r.rs_60d:+.2%}",
+                   "RS vs Parent": f"{vs_icon} {r.rs_20d_vs_parent:+.2%}",
                    "Slope": f"{r.rs_slope:+.4f}", "Composite": f"{r.industry_composite:.1f}"}
         else:
             p5 = prices[r.ticker].pct_change(5).iloc[-1] if r.ticker in prices.columns else 0
@@ -99,7 +104,11 @@ def render_industry_panel(result: dict):
                    "Parent": _parent_label(r.parent_sector), "20d Trend": spark,
                    "Perf 5d": f"{p5:+.2%}", "Perf 20d": f"{p20:+.2%}", "Perf 60d": f"{p60:+.2%}",
                    "Composite": f"{r.industry_composite:.1f}"}
-        row.update({"#Sector": f"#{r.rs_rank_within_sector}", "State": state_val, "Conf": state_conf})
+        row.update({
+            "#Sector": f"#{r.rs_rank_within_sector}",
+            "State": state_val, "Conf": state_conf,
+            "Parent State": parent_state_val,
+        })
         rows.append(row)
 
     df = pd.DataFrame(rows)
