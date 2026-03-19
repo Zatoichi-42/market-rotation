@@ -37,25 +37,30 @@ def render_replay_panel(result: dict):
 
     st.subheader("History Replay")
 
-    # ── ◄ Slider ► navigation ─────────────────────────
+    # ── Navigation: step selector + ◄ slider ► ───────
     if "replay_idx" not in st.session_state:
         st.session_state.replay_idx = len(available) - 1
 
-    def _go_prev():
-        st.session_state.replay_idx = max(0, st.session_state.replay_idx - 1)
-
-    def _go_next():
-        st.session_state.replay_idx = min(len(available) - 1, st.session_state.replay_idx + 1)
-
-    nav_l, nav_s, nav_r = st.columns([1, 8, 1])
+    step_col, nav_l, nav_r = st.columns([2, 1, 1])
+    with step_col:
+        step_map = {"1 day": 1, "5 days": 5, "20 days": 20, "60 days": 60}
+        step_label = st.selectbox("Step size", list(step_map.keys()), index=0, key="rp_step")
+        step = step_map[step_label]
     with nav_l:
-        st.button("◄ Prev", key="rp_prev", on_click=_go_prev)
+        def _go_prev():
+            st.session_state.replay_idx = max(0, st.session_state.replay_idx - step)
+        st.button(f"◄ Back {step_label}", key="rp_prev", on_click=_go_prev)
     with nav_r:
-        st.button("Next ►", key="rp_next", on_click=_go_next)
-    with nav_s:
-        idx = st.slider("Date", 0, len(available) - 1, st.session_state.replay_idx, format="", key="rp_slider")
-        if idx != st.session_state.replay_idx:
-            st.session_state.replay_idx = idx
+        def _go_next():
+            st.session_state.replay_idx = min(len(available) - 1, st.session_state.replay_idx + step)
+        st.button(f"Forward {step_label} ►", key="rp_next", on_click=_go_next)
+
+    # Slider — uses session_state key directly so buttons + slider stay in sync
+    st.session_state.replay_idx = st.slider(
+        "Timeline", 0, len(available) - 1,
+        value=st.session_state.replay_idx, format="",
+        key="rp_slider_v2",
+    )
 
     sel_date = available[st.session_state.replay_idx]
     st.markdown(f"**{sel_date}** &nbsp; ({available[0]} → {available[-1]}, {len(available)} snapshots)")
