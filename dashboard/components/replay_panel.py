@@ -38,39 +38,34 @@ def render_replay_panel(result: dict):
     st.subheader("History Replay")
 
     # ── Navigation ────────────────────────────────────
+    # Single source of truth: st.number_input for index (no slider/button conflicts)
     max_idx = len(available) - 1
 
-    # Use a separate key for the actual index to avoid slider-button conflicts
-    if "rp_idx" not in st.session_state:
-        st.session_state.rp_idx = max_idx
-    if "rp_step_size" not in st.session_state:
-        st.session_state.rp_step_size = 1
-
-    step_col, nav_l, nav_r = st.columns([2, 1, 1])
+    step_col, nav_l, nav_r, idx_col = st.columns([2, 1, 1, 2])
     with step_col:
         step_map = {"1 day": 1, "5 days": 5, "20 days": 20, "60 days": 60}
-        step_label = st.selectbox("Step size", list(step_map.keys()), index=0, key="rp_step_select")
-        st.session_state.rp_step_size = step_map[step_label]
+        step_label = st.selectbox("Step size", list(step_map.keys()), index=0, key="rp_step_sel")
+        step = step_map[step_label]
 
-    def _prev_click():
-        s = st.session_state.rp_step_size
-        st.session_state.rp_idx = max(0, st.session_state.rp_idx - s)
-
-    def _next_click():
-        s = st.session_state.rp_step_size
-        st.session_state.rp_idx = min(max_idx, st.session_state.rp_idx + s)
+    # Use number_input as the single source of truth — no on_click, no slider
+    with idx_col:
+        current_idx = st.number_input(
+            "Snapshot #", min_value=0, max_value=max_idx,
+            value=max_idx, step=step, key="rp_num_input",
+        )
 
     with nav_l:
-        st.button("◄ Back", on_click=_prev_click, key="rp_back_btn")
+        if st.button("◄ Back", key="rp_back"):
+            current_idx = max(0, current_idx - step)
+            st.session_state.rp_num_input = current_idx
+            st.rerun()
     with nav_r:
-        st.button("Forward ►", on_click=_next_click, key="rp_fwd_btn")
+        if st.button("Forward ►", key="rp_fwd"):
+            current_idx = min(max_idx, current_idx + step)
+            st.session_state.rp_num_input = current_idx
+            st.rerun()
 
-    # Number input for direct index control (avoids slider widget key conflicts)
-    new_idx = st.slider("Timeline", 0, max_idx, value=st.session_state.rp_idx, key="rp_timeline_slider")
-    if new_idx != st.session_state.rp_idx:
-        st.session_state.rp_idx = new_idx
-
-    sel_date = available[st.session_state.rp_idx]
+    sel_date = available[current_idx]
     st.markdown(f"**{sel_date}** &nbsp; ({available[0]} → {available[-1]}, {len(available)} snapshots)")
 
     try:
@@ -165,7 +160,7 @@ def render_replay_panel(result: dict):
 
     # ── Rolling 1d / 5d / 20d / 60d Metrics ──────────
     st.subheader("Rolling Period Metrics")
-    prev_idx = st.session_state.rp_idx - 1
+    prev_idx = current_idx - 1
     if prev_idx >= 0 and sel_date in date_strs:
         dloc = prices.index.get_indexer(pd.to_datetime([sel_date]), method="nearest")[0]
 
