@@ -61,8 +61,10 @@ def render_sector_table(result: dict):
     is_rs = "Relative" in view
 
     # ── Main table ────────────────────────────────────
-    from dashboard.components.style_utils import color_row_by_state
+    from dashboard.components.style_utils import style_dataframe
+    from dashboard.components.sparkline import make_sparkline_unicode
     rows = []
+    rev_map = result.get("reversal_map", {})
     for r in rs_readings:
         state = states.get(r.ticker)
         pump = pumps.get(r.ticker)
@@ -77,28 +79,35 @@ def render_sector_table(result: dict):
         elif r.rs_rank_change < 0:
             rank_arrow = f" ({r.rs_rank_change})"
 
-        rev_map = result.get("reversal_map", {})
         rev = rev_map.get(r.ticker)
         rev_str = f"{rev.reversal_score:.2f}" if rev else "—"
         rev_pct = f"{rev.reversal_percentile:.0f}%" if rev else "—"
         if rev and rev.above_75th:
             rev_pct += " ⚠"
 
+        # Inline unicode sparkline from 20d RS history
+        spark = "—"
+        if r.ticker in rs_history.columns:
+            spark_series = rs_history[r.ticker].tail(60).dropna()
+            if not spark_series.empty:
+                spark = make_sparkline_unicode(spark_series, width=12)
+
         if is_rs:
             row = {
                 "Rank": f"#{r.rs_rank}{rank_arrow}",
                 "Ticker": r.ticker, "Sector": r.name,
+                "20d Trend": spark,
                 "RS 5d": f"{r.rs_5d:+.2%}", "RS 20d": f"{r.rs_20d:+.2%}", "RS 60d": f"{r.rs_60d:+.2%}",
                 "Slope": f"{r.rs_slope:+.4f}", "Composite": f"{r.rs_composite:.1f}",
             }
         else:
-            # Absolute performance
             p5 = prices[r.ticker].pct_change(5).iloc[-1] if r.ticker in prices.columns else 0
             p20 = prices[r.ticker].pct_change(20).iloc[-1] if r.ticker in prices.columns else 0
             p60 = prices[r.ticker].pct_change(60).iloc[-1] if r.ticker in prices.columns and len(prices) > 60 else 0
             row = {
                 "Rank": f"#{r.rs_rank}{rank_arrow}",
                 "Ticker": r.ticker, "Sector": r.name,
+                "20d Trend": spark,
                 "Perf 5d": f"{p5:+.2%}", "Perf 20d": f"{p20:+.2%}", "Perf 60d": f"{p60:+.2%}",
                 "Composite": f"{r.rs_composite:.1f}",
             }
@@ -110,7 +119,7 @@ def render_sector_table(result: dict):
         rows.append(row)
 
     df = pd.DataFrame(rows)
-    styled = df.style.apply(color_row_by_state, axis=1)
+    styled = style_dataframe(df)
     st.dataframe(styled, width="stretch", hide_index=True)
 
     # ── Sparklines ────────────────────────────────────
@@ -167,12 +176,5 @@ def render_sector_table(result: dict):
     st.plotly_chart(fig, width="stretch")
 
     # ── Valuations ────────────────────────────────────
-    with st.expander("Sector Valuations (from yfinance — updated daily)"):
-        from dashboard.components.valuations import fetch_valuations
-        sector_tickers = [r.ticker for r in rs_readings]
-        val_df = fetch_valuations(sector_tickers)
-        if not val_df.empty:
-            display_cols = [c for c in ["Ticker", "P/E", "Fwd P/E", "P/B", "Div Yield", "AUM ($B)", "% from 52w High", "Expense Ratio"] if c in val_df.columns]
-            st.dataframe(val_df[display_cols], width="stretch", hide_index=True)
-        else:
-            st.info("Valuation data unavailable.")
+    from dashboard.components.valuations import render_valuations_panel
+    render_valuations_panel([r.ticker for r in rs_readings], tab_label="Sector")

@@ -82,7 +82,14 @@ def render_industry_panel(result: dict):
     state_map = states if isinstance(states, dict) else {s.ticker: s for s in states} if states else {}
 
     # ── Main table ────────────────────────────────────
-    from dashboard.components.style_utils import color_row_by_state
+    from dashboard.components.style_utils import style_dataframe
+    from dashboard.components.sparkline import make_sparkline_unicode
+
+    # Pre-compute RS history for sparklines
+    ind_tickers = [r.ticker for r in display_sorted]
+    available_for_spark = [t for t in ind_tickers if t in prices.columns]
+    rs_hist = compute_rs_all(prices, available_for_spark, window=20) if available_for_spark else pd.DataFrame()
+
     rows = []
     for r in display_sorted:
         vs_icon = "▲" if r.rs_20d_vs_parent > 0.001 else ("▼" if r.rs_20d_vs_parent < -0.001 else "—")
@@ -90,11 +97,19 @@ def render_industry_panel(result: dict):
         state_val = state.state.value if state else "—"
         state_conf = f"{state.confidence}%" if state else "—"
 
+        # Inline unicode sparkline
+        spark = "—"
+        if r.ticker in rs_hist.columns:
+            spark_series = rs_hist[r.ticker].tail(60).dropna()
+            if not spark_series.empty:
+                spark = make_sparkline_unicode(spark_series, width=12)
+
         if is_rs:
             row = {
                 "Rank": r.rs_rank,
                 "Industry": f"{r.ticker} ({r.name})",
                 "Parent": _parent_label(r.parent_sector),
+                "20d Trend": spark,
                 "RS vs SPY (20d)": f"{r.rs_20d:+.2%}",
                 "RS vs Parent": f"{vs_icon} {r.rs_20d_vs_parent:+.2%}",
                 "Slope": f"{r.rs_slope:+.4f}",
@@ -108,6 +123,7 @@ def render_industry_panel(result: dict):
                 "Rank": r.rs_rank,
                 "Industry": f"{r.ticker} ({r.name})",
                 "Parent": _parent_label(r.parent_sector),
+                "20d Trend": spark,
                 "Perf 5d": f"{p5:+.2%}", "Perf 20d": f"{p20:+.2%}", "Perf 60d": f"{p60:+.2%}",
                 "Ind. Composite": f"{r.industry_composite:.1f}",
             }
@@ -119,7 +135,7 @@ def render_industry_panel(result: dict):
         rows.append(row)
 
     df = pd.DataFrame(rows)
-    styled = df.style.apply(color_row_by_state, axis=1)
+    styled = style_dataframe(df)
     st.dataframe(styled, width="stretch", hide_index=True)
 
     # ── Sparklines (20d RS, 60 trading days) ──────────
@@ -212,12 +228,5 @@ def render_industry_panel(result: dict):
         st.divider()
 
     # ── Valuations ────────────────────────────────────
-    with st.expander("Industry Valuations (from yfinance — updated daily)"):
-        from dashboard.components.valuations import fetch_valuations
-        ind_tickers_all = [r.ticker for r in display_sorted]
-        val_df = fetch_valuations(ind_tickers_all)
-        if not val_df.empty:
-            display_cols = [c for c in ["Ticker", "P/E", "Fwd P/E", "P/B", "Div Yield", "AUM ($B)", "% from 52w High", "Expense Ratio"] if c in val_df.columns]
-            st.dataframe(val_df[display_cols], width="stretch", hide_index=True)
-        else:
-            st.info("Valuation data unavailable.")
+    from dashboard.components.valuations import render_valuations_panel
+    render_valuations_panel([r.ticker for r in display_sorted], tab_label="Industry")
