@@ -337,3 +337,68 @@ def render_regime_panel(result: dict):
             xaxis=dict(range=[ratio_60.index[0], ratio_60.index[-1]]),
         )
         st.plotly_chart(fig, width="stretch")
+
+    # ── 1d Rolling Metrics ────────────────────────────
+    st.subheader("1d Rolling Metrics (24h change)")
+    _render_1d_metrics(result)
+
+
+def _render_1d_metrics(result: dict):
+    """Show 1-day changes for key signals."""
+    import pandas as pd
+    prices = result["prices"]
+    vix = result["vix"]
+
+    if len(prices) < 2 or len(vix) < 2:
+        st.caption("Insufficient data for 1d metrics.")
+        return
+
+    rows = []
+
+    # VIX 1d change
+    vix_now, vix_prev = vix.iloc[-1], vix.iloc[-2]
+    vix_chg = vix_now - vix_prev
+    rows.append({"Metric": "VIX", "Current": f"{vix_now:.1f}", "1d Change": f"{vix_chg:+.1f}",
+                 "Signal": "rising" if vix_chg > 0.5 else ("falling" if vix_chg < -0.5 else "stable")})
+
+    # SPY 1d return
+    if "SPY" in prices.columns:
+        spy_ret = prices["SPY"].pct_change().iloc[-1]
+        rows.append({"Metric": "SPY", "Current": f"{prices['SPY'].iloc[-1]:.2f}",
+                     "1d Change": f"{spy_ret:+.2%}", "Signal": ""})
+
+    # RSP/SPY 1d change
+    if "RSP" in prices.columns and "SPY" in prices.columns:
+        ratio = prices["RSP"] / prices["SPY"]
+        r_chg = ratio.iloc[-1] - ratio.iloc[-2]
+        rows.append({"Metric": "RSP/SPY", "Current": f"{ratio.iloc[-1]:.4f}",
+                     "1d Change": f"{r_chg:+.4f}",
+                     "Signal": "broadening" if r_chg > 0 else "narrowing"})
+
+    # HYG/LQD 1d change
+    credit = result.get("credit")
+    if credit is not None and "hyg_close" in credit.columns and "lqd_close" in credit.columns:
+        cr = (credit["hyg_close"] / credit["lqd_close"]).dropna()
+        if len(cr) >= 2:
+            cr_chg = cr.iloc[-1] - cr.iloc[-2]
+            rows.append({"Metric": "HYG/LQD", "Current": f"{cr.iloc[-1]:.4f}",
+                         "1d Change": f"{cr_chg:+.4f}",
+                         "Signal": "risk-on" if cr_chg > 0 else "risk-off"})
+
+    # Top/bottom 1d RS movers
+    rs_readings = result.get("rs_readings", [])
+    if rs_readings and "SPY" in prices.columns and len(prices) >= 2:
+        spy_1d = prices["SPY"].pct_change().iloc[-1]
+        movers = []
+        for r in rs_readings:
+            if r.ticker in prices.columns:
+                sec_1d = prices[r.ticker].pct_change().iloc[-1]
+                movers.append((r.ticker, sec_1d - spy_1d))
+        if movers:
+            movers.sort(key=lambda x: x[1], reverse=True)
+            t, v = movers[0]
+            rows.append({"Metric": f"Top 1d RS ({t})", "Current": "", "1d Change": f"{v:+.2%}", "Signal": "leading today"})
+            t, v = movers[-1]
+            rows.append({"Metric": f"Bottom 1d RS ({t})", "Current": "", "1d Change": f"{v:+.2%}", "Signal": "lagging today"})
+
+    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)

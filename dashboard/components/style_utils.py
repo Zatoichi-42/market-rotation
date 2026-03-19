@@ -1,17 +1,20 @@
-"""Shared styling utilities for dashboard tables — Tailwind-based dark theme colors."""
+"""
+Shared styling — exact Tailwind dark-theme colors per Phase 3 spec.
+
+Analysis state → (background hex, text hex)
+"""
 from engine.schemas import AnalysisState
 
-# Analysis state → row background color (dark theme, subtle tints)
-STATE_ROW_COLORS = {
-    AnalysisState.OVERT_PUMP.value:  "rgba(34, 197, 94, 0.18)",    # Green — strongest IN
-    AnalysisState.BROADENING.value:  "rgba(34, 197, 94, 0.10)",    # Light green — building
-    AnalysisState.ACCUMULATION.value: "rgba(148, 163, 184, 0.06)", # Slate — early/neutral
-    AnalysisState.EXHAUSTION.value:  "rgba(249, 115, 22, 0.15)",   # Orange — fading
-    AnalysisState.ROTATION.value:    "rgba(239, 68, 68, 0.18)",    # Red — rotating OUT
-    AnalysisState.AMBIGUOUS.value:   "rgba(234, 179, 8, 0.10)",    # Yellow — unclear
+# Spec §Feature 5: exact hex colors for dark theme
+STATE_COLORS = {
+    "Broadening":        ("#064e3b", "#34d399"),  # Dark green bg, green text
+    "Overt Pump":        ("#064e3b", "#34d399"),  # Same green family
+    "Exhaustion":        ("#7c2d12", "#fb923c"),  # Dark orange bg, orange text
+    "Rotation/Reversal": ("#7f1d1d", "#f87171"),  # Dark red bg, red text
+    "Ambiguous":         ("#713f12", "#fbbf24"),  # Dark yellow bg, yellow text
+    "Accumulation":      ("#1e293b", "#94a3b8"),  # Dark slate bg, gray text
 }
 
-# Trade state colors (for future Phase 3 trade panel)
 TRADE_STATE_COLORS = {
     "Long Entry":       "#22c55e",
     "Selective Add":    "#4ade80",
@@ -25,13 +28,24 @@ TRADE_STATE_COLORS = {
     "No Trade":         "#475569",
 }
 
+# Bar chart colors keyed by state (for composite chart)
+STATE_BAR_COLORS = {
+    "Broadening":        "#22c55e",  # Green
+    "Overt Pump":        "#22c55e",  # Green
+    "Exhaustion":        "#f97316",  # Orange
+    "Rotation/Reversal": "#ef4444",  # Red
+    "Ambiguous":         "#eab308",  # Yellow
+    "Accumulation":      "#94a3b8",  # Gray
+}
+
 
 def color_row_by_state(row, state_col: str = "State"):
-    """Return CSS styles for each cell based on the State column value."""
+    """Apply bg + text color from STATE_COLORS based on the State column."""
     state_val = row.get(state_col, "")
-    bg = STATE_ROW_COLORS.get(state_val, "")
-    if bg:
-        return [f"background-color: {bg}"] * len(row)
+    colors = STATE_COLORS.get(state_val)
+    if colors:
+        bg, fg = colors
+        return [f"background-color: {bg}; color: {fg}"] * len(row)
     return [""] * len(row)
 
 
@@ -49,7 +63,7 @@ def color_delta(val: str) -> str:
 
 
 def style_dataframe(df, state_col="State", delta_col="Delta"):
-    """Apply full row coloring + delta coloring to a DataFrame."""
+    """Apply row bg/text coloring + delta coloring."""
     styled = df.style.apply(color_row_by_state, axis=1, state_col=state_col)
     if delta_col in df.columns:
         styled = styled.map(color_delta, subset=[delta_col])

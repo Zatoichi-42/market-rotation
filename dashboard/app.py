@@ -223,6 +223,11 @@ def main():
     with tab1:
         from dashboard.components.regime_panel import render_regime_panel
         render_regime_panel(result)
+        # Baton pass alerts + reversal diagnostics on page 1
+        from dashboard.components.baton_pass_alert import render_baton_pass_alerts
+        render_baton_pass_alerts(result)
+        from dashboard.components.reversal_diagnostics import render_reversal_diagnostics
+        render_reversal_diagnostics(result)
 
     with tab2:
         from dashboard.components.sector_table import render_sector_table
