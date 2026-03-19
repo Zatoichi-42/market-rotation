@@ -34,14 +34,23 @@ def fetch_valuations_raw(tickers: tuple) -> pd.DataFrame:
     for t in tickers:
         try:
             info = yf.Ticker(t).info
+            # Try multiple keys — yfinance ETF field names vary
+            pe = info.get("trailingPE")
+            fwd_pe = info.get("forwardPE")
+            pb = info.get("priceToBook")
+            div_y = info.get("dividendYield") or info.get("yield")
+            expense = (info.get("annualReportExpenseRatio")
+                       or info.get("expenseRatio")
+                       or info.get("annualHoldingsTurnover"))  # fallback keys
+            aum = info.get("totalAssets") or info.get("netAssets")
             rows.append({
                 "Ticker": t,
-                "_pe_raw": info.get("trailingPE"),
-                "_fwd_pe_raw": info.get("forwardPE"),
-                "_pb_raw": info.get("priceToBook"),
-                "_div_yield_raw": info.get("dividendYield"),
-                "_expense_raw": info.get("annualReportExpenseRatio"),
-                "_aum_raw": info.get("totalAssets"),
+                "_pe_raw": pe,
+                "_fwd_pe_raw": fwd_pe,
+                "_pb_raw": pb,
+                "_div_yield_raw": div_y,
+                "_expense_raw": expense,
+                "_aum_raw": aum,
                 "_52w_high_raw": info.get("fiftyTwoWeekHigh"),
                 "_price_raw": info.get("previousClose") or info.get("regularMarketPrice"),
             })

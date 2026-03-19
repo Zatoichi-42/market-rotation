@@ -177,12 +177,25 @@ def run_pipeline():
     )
     reversal_map = {r.ticker: r for r in reversal_readings}
 
-    # State Classifier (with reversal scores)
-    rs_ranks = {r.ticker: r.rs_rank for r in rs_readings}
+    # Add industry pump scores (use industry_composite as RS pillar)
+    for ir in industry_rs_readings:
+        if ir.ticker not in pumps:
+            ind_score = compute_pump_score(ir.industry_composite, 50.0, 50.0, pump_weights)
+            pumps[ir.ticker] = PumpScoreReading(
+                ticker=ir.ticker, name=ir.name,
+                rs_pillar=ir.industry_composite, participation_pillar=50.0, flow_pillar=50.0,
+                pump_score=ind_score, pump_delta=0.0, pump_delta_5d_avg=0.0,
+            )
+            delta_histories[ir.ticker] = [0.0]
+
+    # State Classifier (sectors + industries, with reversal scores)
+    all_ranks = {r.ticker: r.rs_rank for r in rs_readings}
+    for ir in industry_rs_readings:
+        all_ranks[ir.ticker] = ir.rs_rank
     pump_pcts = percentile_rank(pd.Series({t: p.pump_score for t, p in pumps.items()}))
     states = classify_all_sectors(
         pumps=pumps, priors=prior_states, regime=regime.state,
-        rs_ranks=rs_ranks, pump_percentiles=pump_pcts.to_dict(),
+        rs_ranks=all_ranks, pump_percentiles=pump_pcts.to_dict(),
         delta_histories=delta_histories,
         settings=settings["state"],
         reversal_scores=reversal_map,

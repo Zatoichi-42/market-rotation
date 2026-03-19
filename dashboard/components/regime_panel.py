@@ -385,20 +385,53 @@ def _render_1d_metrics(result: dict):
                          "1d Change": f"{cr_chg:+.4f}",
                          "Signal": "risk-on" if cr_chg > 0 else "risk-off"})
 
-    # Top/bottom 1d RS movers
+    # Top/bottom 1d RS movers (with names)
     rs_readings = result.get("rs_readings", [])
+    name_map = {r.ticker: r.name for r in rs_readings}
     if rs_readings and "SPY" in prices.columns and len(prices) >= 2:
         spy_1d = prices["SPY"].pct_change().iloc[-1]
         movers = []
         for r in rs_readings:
             if r.ticker in prices.columns:
                 sec_1d = prices[r.ticker].pct_change().iloc[-1]
-                movers.append((r.ticker, sec_1d - spy_1d))
+                movers.append((r.ticker, r.name, sec_1d - spy_1d))
         if movers:
-            movers.sort(key=lambda x: x[1], reverse=True)
-            t, v = movers[0]
-            rows.append({"Metric": f"Top 1d RS ({t})", "Current": "", "1d Change": f"{v:+.2%}", "Signal": "leading today"})
-            t, v = movers[-1]
-            rows.append({"Metric": f"Bottom 1d RS ({t})", "Current": "", "1d Change": f"{v:+.2%}", "Signal": "lagging today"})
+            movers.sort(key=lambda x: x[2], reverse=True)
+            t, n, v = movers[0]
+            rows.append({"Metric": f"Top 1d RS: {t} ({n})", "Current": "", "1d Change": f"{v:+.2%}", "Signal": "leading today"})
+            t, n, v = movers[-1]
+            rows.append({"Metric": f"Bottom 1d RS: {t} ({n})", "Current": "", "1d Change": f"{v:+.2%}", "Signal": "lagging today"})
 
-    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+    # 5d / 20d / 60d rolling RS leaders
+    if rs_readings and "SPY" in prices.columns:
+        for window, label in [(5, "5d"), (20, "20d"), (60, "60d")]:
+            if len(prices) > window:
+                spy_w = prices["SPY"].pct_change(window).iloc[-1]
+                best_t, best_n, best_v = None, None, -999
+                for r in rs_readings:
+                    if r.ticker in prices.columns:
+                        sec_w = prices[r.ticker].pct_change(window).iloc[-1]
+                        rs_w = sec_w - spy_w
+                        if rs_w > best_v:
+                            best_t, best_n, best_v = r.ticker, r.name, rs_w
+                if best_t:
+                    rows.append({"Metric": f"Top {label} RS: {best_t} ({best_n})",
+                                 "Current": "", "1d Change": f"{best_v:+.2%}",
+                                 "Signal": f"leading {label}"})
+
+    # Color code the Signal column
+    df_metrics = pd.DataFrame(rows)
+
+    def _color_signal(val):
+        v = str(val).lower()
+        if any(w in v for w in ["leading", "risk-on", "broadening", "falling", "stable"]):
+            return "color: #22c55e"
+        if any(w in v for w in ["lagging", "risk-off", "narrowing", "rising"]):
+            return "color: #ef4444"
+        return ""
+
+    if not df_metrics.empty and "Signal" in df_metrics.columns:
+        styled = df_metrics.style.map(_color_signal, subset=["Signal"])
+        st.dataframe(styled, width="stretch", hide_index=True)
+    else:
+        st.dataframe(df_metrics, width="stretch", hide_index=True)

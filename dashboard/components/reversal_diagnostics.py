@@ -39,7 +39,7 @@ def render_reversal_diagnostics(result: dict):
         rvol = subs.get("rvol", 1.0)
 
         rows.append({
-            "Group": r.ticker,
+            "Group": f"{r.ticker} ({r.name})",
             "Rev Score": f"{r.reversal_score:.2f}",
             "Rev %ile": f"{r.reversal_percentile:.0f}%",
             "CLV": f"{clv:.2f}" if not _is_nan(clv) else "—",
