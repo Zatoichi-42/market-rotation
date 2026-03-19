@@ -10,13 +10,14 @@ from tests.factories import INDUSTRY_PARENT_MAP, INDUSTRY_TICKERS
 
 INDUSTRY_NAMES = {
     "SMH": "Semiconductors", "IGV": "Software", "HACK": "Cybersecurity",
+    "SOXX": "Semiconductors (iShares)",
     "XBI": "Biotech", "IHI": "Medical Devices",
     "KRE": "Regional Banks", "IAI": "Broker-Dealers", "KIE": "Insurance",
-    "XOP": "Oil & Gas E&P", "OIH": "Oil Services",
+    "XOP": "Oil & Gas E&P", "OIH": "Oil Services", "URA": "Uranium & Nuclear",
     "ITA": "Aerospace & Defense", "XAR": "Aerospace & Defense (SPDR)",
     "XHB": "Homebuilders", "ITB": "Home Construction", "XRT": "Retail", "IBUY": "Online Retail",
     "XME": "Metals & Mining", "GDX": "Gold Miners",
-    "VNQ": "REITs", "TAN": "Solar",
+    "VNQ": "REITs", "TAN": "Solar", "NLR": "Nuclear Energy",
 }
 
 INDUSTRIES_CONFIG = [
@@ -163,8 +164,8 @@ class TestIndustryLeadsSector:
         assert xbi.rs_20d_vs_parent < 0
 
     def test_full_industry_count(self, industry_normal_market):
-        """All 20 industries returned."""
+        """All industries returned."""
         results = compute_industry_rs(
             industry_normal_market["prices"], INDUSTRIES_CONFIG,
         )
-        assert len(results) == 20
+        assert len(results) == len(INDUSTRY_TICKERS)

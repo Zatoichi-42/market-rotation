@@ -22,9 +22,9 @@ logger = logging.getLogger(__name__)
 _SECTOR_TICKERS = ["XLK", "XLV", "XLF", "XLE", "XLI", "XLU", "XLRE", "XLC", "XLY", "XLP", "XLB"]
 _MARKET_TICKERS = ["SPY", "RSP", "HYG", "LQD", "QQQ", "IWM", "DIA"]
 _INDUSTRY_TICKERS = [
-    "SMH", "IGV", "HACK", "XBI", "IHI", "KRE", "IAI", "KIE",
-    "XOP", "OIH", "ITA", "XAR", "XHB", "ITB", "XRT", "IBUY",
-    "XME", "GDX", "VNQ", "TAN",
+    "SMH", "IGV", "HACK", "SOXX", "XBI", "IHI", "KRE", "IAI", "KIE",
+    "XOP", "OIH", "URA", "ITA", "XAR", "XHB", "ITB", "XRT", "IBUY",
+    "XME", "GDX", "VNQ", "TAN", "NLR",
 ]
 _VIX_TICKERS = ["^VIX", "^VIX3M"]
 

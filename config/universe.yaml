@@ -73,6 +73,10 @@ industries:
     name: "Cybersecurity"
     parent_sector: "XLK"
     tier: "T1"
+  - ticker: "SOXX"
+    name: "Semiconductors (iShares)"
+    parent_sector: "XLK"
+    tier: "T1"
   # Health Care
   - ticker: "XBI"
     name: "Biotech"
@@ -102,6 +106,10 @@ industries:
     tier: "T1"
   - ticker: "OIH"
     name: "Oil Services"
+    parent_sector: "XLE"
+    tier: "T1"
+  - ticker: "URA"
+    name: "Uranium & Nuclear"
     parent_sector: "XLE"
     tier: "T1"
   # Industrials
@@ -147,6 +155,10 @@ industries:
   # Utilities
   - ticker: "TAN"
     name: "Solar"
+    parent_sector: "XLU"
+    tier: "T1"
+  - ticker: "NLR"
+    name: "Nuclear Energy"
     parent_sector: "XLU"
     tier: "T1"
 

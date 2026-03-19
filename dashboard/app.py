@@ -148,13 +148,32 @@ def run_pipeline():
     available_industries = [i for i in industries_cfg if i["ticker"] in prices.columns]
     industry_rs_readings = compute_industry_rs(prices, available_industries) if available_industries else []
 
-    # Reversal Scores (Phase 2)
+    # Reversal Scores (Phase 2) — with rolling history for real percentiles
+    from engine.reversal_score import compute_reversal_score
     rev_settings = settings.get("reversal", {})
     rev_weights = settings.get("reversal_score", {"breadth_det_weight": 0.40, "price_break_weight": 0.30, "crowding_weight": 0.30})
     all_tickers_for_rev = [r.ticker for r in rs_readings]
+
+    # Build score history: compute reversal score at 20 historical points
+    rev_history = {t: [] for t in all_tickers_for_rev}
+    hist_step = max(1, (len(prices) - 60) // 20)
+    for i in range(60, len(prices), hist_step):
+        p_slice = prices.iloc[:i+1]
+        h_slice = data["highs"].iloc[:i+1]
+        l_slice = data["lows"].iloc[:i+1]
+        v_slice = data["volumes"].iloc[:i+1]
+        for t in all_tickers_for_rev:
+            if t in p_slice.columns:
+                r = compute_reversal_score(p_slice, h_slice, l_slice, v_slice, t,
+                                           settings=rev_settings, weights=rev_weights)
+                rev_history[t].append(r.reversal_score)
+
+    history_series = {t: pd.Series(scores) for t, scores in rev_history.items() if scores}
+
     reversal_readings = compute_reversal_scores_batch(
         prices, data["highs"], data["lows"], data["volumes"],
         all_tickers_for_rev, settings=rev_settings, weights=rev_weights,
+        history_scores=history_series,
     )
     reversal_map = {r.ticker: r for r in reversal_readings}
 

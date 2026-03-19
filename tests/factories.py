@@ -652,21 +652,24 @@ def make_volume_data(n_days: int, tickers: list[str],
 # ═══════════════════════════════════════════════════════
 
 INDUSTRY_TICKERS = [
-    "SMH", "IGV", "HACK", "XBI", "IHI", "KRE", "IAI", "KIE",
-    "XOP", "OIH", "ITA", "XAR", "XHB", "ITB", "XRT", "IBUY",
-    "XME", "GDX", "VNQ", "TAN",
+    "SMH", "IGV", "HACK", "SOXX", "XBI", "IHI", "KRE", "IAI", "KIE",
+    "XOP", "OIH", "URA", "ITA", "XAR", "XHB", "ITB", "XRT", "IBUY",
+    "XME", "GDX", "VNQ", "TAN", "NLR",
 ]
 
 INDUSTRY_PARENT_MAP = {
-    "SMH": "XLK", "IGV": "XLK", "HACK": "XLK",
+    "SMH": "XLK", "IGV": "XLK", "HACK": "XLK", "SOXX": "XLK",
     "XBI": "XLV", "IHI": "XLV",
     "KRE": "XLF", "IAI": "XLF", "KIE": "XLF",
-    "XOP": "XLE", "OIH": "XLE",
+    "XOP": "XLE", "OIH": "XLE", "URA": "XLE",
     "ITA": "XLI", "XAR": "XLI",
     "XHB": "XLY", "ITB": "XLY", "XRT": "XLY", "IBUY": "XLY",
     "XME": "XLB", "GDX": "XLB",
     "VNQ": "XLRE",
     "TAN": "XLU",
+    "NLR": "XLU",
+    "SOXX": "XLK",
+    "URA": "XLE",
 }
 
 ALL_TICKERS_V2 = ALL_TICKERS + INDUSTRY_TICKERS
