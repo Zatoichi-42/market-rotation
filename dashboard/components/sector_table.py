@@ -154,6 +154,14 @@ def render_sector_table(result: dict):
         elif r.rs_rank_change < 0:
             rank_arrow = f" ({r.rs_rank_change})"
 
+        # Reversal score (Phase 2)
+        rev_map = result.get("reversal_map", {})
+        rev = rev_map.get(r.ticker)
+        rev_score_str = f"{rev.reversal_score:.2f}" if rev else "—"
+        rev_pct_str = f"{rev.reversal_percentile:.0f}%" if rev else "—"
+        if rev and rev.above_75th:
+            rev_pct_str += " ⚠"
+
         rows.append({
             "Rank": f"#{r.rs_rank}{rank_arrow}",
             "Ticker": r.ticker,
@@ -166,6 +174,8 @@ def render_sector_table(result: dict):
             "Composite": f"{r.rs_composite:.1f}",
             "Pump": f"{pump_score:.2f}",
             "Delta": f"{pump_delta:+.3f}",
+            "Rev": rev_score_str,
+            "Rev %ile": rev_pct_str,
             "State": state_val,
             "Conf": f"{state_conf}%",
         })

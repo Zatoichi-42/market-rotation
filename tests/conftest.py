@@ -7,6 +7,10 @@ from tests.factories import (
     make_edge_case_thresholds, make_sector_rotation, make_breadth_divergence,
     make_flat_choppy_market, make_single_sector_pump, make_missing_data,
     make_momentum_crash, make_all_sectors_identical,
+    # Phase 2
+    make_industry_normal_market, make_industry_rotation,
+    make_reversal_exhaustion, make_reversal_crowding,
+    make_turnover_marginal, make_turnover_clear, make_turnover_exempt,
 )
 
 
@@ -63,6 +67,27 @@ def missing_data():
 @pytest.fixture
 def identical_sectors():
     return make_all_sectors_identical()
+
+
+# Phase 2 fixtures
+@pytest.fixture
+def industry_normal_market():
+    return make_industry_normal_market()
+
+
+@pytest.fixture
+def industry_rotation():
+    return make_industry_rotation()
+
+
+@pytest.fixture
+def reversal_exhaustion():
+    return make_reversal_exhaustion()
+
+
+@pytest.fixture
+def reversal_crowding():
+    return make_reversal_crowding()
 
 
 @pytest.fixture

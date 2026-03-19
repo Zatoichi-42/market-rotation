@@ -44,6 +44,44 @@ pump_score:
   participation_weight: 0.30
   flow_weight: 0.30
 
+# Industry RS settings (Phase 2)
+industry:
+  rs_vs_parent_weight: 0.30
+  rs_vs_spy_weight: 0.70
+  min_history_days: 60
+  short_history_confidence_penalty: 20
+
+# Reversal Score pillar weights (Phase 2)
+reversal_score:
+  breadth_det_weight: 0.40
+  price_break_weight: 0.30
+  crowding_weight: 0.30
+
+# Reversal sub-signal parameters (Phase 2)
+reversal:
+  rs_slope_lookback: 5
+  rs_slope_reversal_threshold: 0
+  participation_decay_window: 20
+  failed_breakout_lookback: 20
+  failed_breakout_reversal_days: 3
+  gap_threshold_pct: 0.005
+  gap_fade_lookback: 20
+  clv_short_window: 5
+  clv_long_window: 20
+  follow_through_window: 10
+  distance_ma_period: 20
+  rvol_lookback: 20
+  price_accel_fast: 5
+  price_accel_slow: 20
+
+# Turnover Filter (Phase 2)
+turnover:
+  min_delta_advantage: 0.08
+  min_persistence_sessions: 3
+  exempt_states:
+    - "Exhaustion"
+    - "Ambiguous"
+
 # State classifier
 state:
   broadening:
