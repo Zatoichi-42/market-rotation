@@ -95,3 +95,34 @@ state:
   ambiguous:
     conflicting_sessions: 3
     max_duration: 15
+
+# Catalyst Gate (Gap Fix 1)
+catalyst:
+  # Confidence penalty for CAUTION action
+  caution_confidence_penalty: 15
+  # Confidence penalty for EMBARGO action
+  embargo_confidence_penalty: 25
+  # Earnings season confidence penalty (softer)
+  earnings_confidence_penalty: 10
+  # Shock detection: number of sectors that must move >1σ for broad shock
+  shock_multi_sector_threshold: 8
+  # Shock magnitude that triggers SHOCK_PAUSE (z-score of sector returns)
+  shock_pause_threshold: 2.0
+  # Shock magnitude that also forces regime recheck
+  shock_regime_recheck_threshold: 3.0
+
+# Concentration Monitor (Gap Fix 4)
+concentration:
+  # Number of leaders to track per sector
+  top_n_leaders: 5
+  # EW/CW z-score thresholds for concentration levels
+  elevated_zscore: -0.5         # Below this = elevated concentration
+  extreme_zscore: -1.5          # Below this = extreme concentration
+  # Leader health thresholds
+  leader_strong_min_avg_rs: 0.0   # Average leader RS vs sector > this = strong
+  leader_deteriorating_max_rs: -0.02  # Average leader RS below this = deteriorating
+  leader_dispersion_mixed: 0.03   # RS dispersion above this = mixed (some up, some down)
+  # Participation modifier bounds
+  healthy_modifier: 15            # Bonus when concentrated but leaders strong
+  unhealthy_modifier: -15         # Penalty when concentrated and leaders weak
+

@@ -49,6 +49,40 @@ class GroupType(Enum):
     INDUSTRY = "industry"
 
 
+class CatalystCategory(Enum):
+    MACRO = "Macro"
+    SECTOR = "Sector"
+    EARNINGS = "Earnings"
+
+
+class CatalystImpact(Enum):
+    HIGH = "High"
+    MEDIUM = "Medium"
+    LOW = "Low"
+
+
+class CatalystAction(Enum):
+    CLEAR = "Clear"
+    CAUTION = "Caution"
+    EMBARGO = "Embargo"
+    SHOCK_PAUSE = "Shock Pause"
+
+
+class ShockType(Enum):
+    BROAD_SELLOFF = "Broad Selloff"
+    BROAD_RALLY = "Broad Rally"
+    SECTOR_DISLOCATION = "Sector Dislocation"
+    CORRELATION_SPIKE = "Correlation Spike"
+    NONE = "None"
+
+
+class ConcentrationRegime(Enum):
+    BROAD_HEALTHY = "Broad Healthy"
+    CONCENTRATED_HEALTHY = "Concentrated Healthy"
+    CONCENTRATED_FRAGILE = "Concentrated Fragile"
+    CONCENTRATED_UNHEALTHY = "Concentrated Unhealthy"
+
+
 # ── Regime Gate ────────────────────────────────────────
 
 @dataclass
@@ -216,6 +250,61 @@ class PumpMapRow:
     rs_vs_parent: Optional[float]
 
 
+# ── Catalyst Gate ─────────────────────────────────────
+# (Enums defined above in Enums section)
+
+@dataclass
+class ScheduledCatalyst:
+    """A known upcoming macro/sector/earnings event."""
+    date: str                      # ISO date
+    name: str
+    category: CatalystCategory
+    impact: CatalystImpact
+    affected_sectors: list[str]    # ["XLE", "XOP"] or ["ALL"]
+    embargo_sessions: int          # Sessions ±1 to suppress new entries
+
+
+@dataclass
+class CatalystShock:
+    """Detected unscheduled market shock from abnormal price action."""
+    date: str
+    shock_type: ShockType
+    magnitude: float               # Z-score of the shock vs history
+    affected_tickers: list[str]
+    confidence: int
+    explanation: str
+
+
+@dataclass
+class CatalystAssessment:
+    """Combined catalyst gate output."""
+    action: CatalystAction
+    scheduled_catalyst: Optional[str]
+    shock_detected: ShockType
+    shock_magnitude: float
+    affected_sectors: list[str]
+    confidence_modifier: int       # -30 to 0 (reduces downstream confidence)
+    explanation: str
+    multi_sector_count: int = 0    # How many sectors moving in same direction
+
+
+# ── Concentration Monitor ────────────────────────────
+# (Enum defined above in Enums section)
+
+@dataclass
+class ConcentrationReading:
+    """Per-sector concentration and leader health assessment."""
+    sector_ticker: str
+    ew_cw_zscore: float
+    leader_health: str             # "strong" | "mixed" | "deteriorating"
+    leader_tickers: list[str]
+    leader_avg_rs: float
+    leader_dispersion: float
+    regime: ConcentrationRegime
+    participation_modifier: int    # -15 to +15
+    explanation: str
+
+
 # ── Snapshot (for replay) ──────────────────────────────
 
 @dataclass
@@ -231,3 +320,6 @@ class DailySnapshot:
     industry_rs: list = field(default_factory=list)
     reversal_scores: list = field(default_factory=list)
     pump_map: list = field(default_factory=list)
+    # Gap fix additions
+    catalyst: Optional[CatalystAssessment] = None
+    concentration: list = field(default_factory=list)

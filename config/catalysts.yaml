@@ -1,0 +1,102 @@
+# Scheduled Macro Catalyst Calendar — 2026
+# Updated monthly by operator. Covers ~80% of market-moving events.
+# Dates sourced from Fed calendar, BLS schedule, OPEC announcements.
+
+recurring:
+  # ── FOMC Decisions (8x/year) ──
+  - name: "FOMC Decision"
+    category: MACRO
+    impact: HIGH
+    affected: ["ALL"]
+    embargo_sessions: 1
+    dates:
+      - "2026-01-29"
+      - "2026-03-18"
+      - "2026-05-06"
+      - "2026-06-17"
+      - "2026-07-29"
+      - "2026-09-16"
+      - "2026-11-04"
+      - "2026-12-16"
+
+  # ── CPI Release (monthly, typically 2nd week) ──
+  - name: "CPI Release"
+    category: MACRO
+    impact: HIGH
+    affected: ["ALL"]
+    embargo_sessions: 1
+    dates:
+      - "2026-01-14"
+      - "2026-02-12"
+      - "2026-03-12"
+      - "2026-04-10"
+      - "2026-05-13"
+      - "2026-06-11"
+      - "2026-07-11"
+      - "2026-08-12"
+      - "2026-09-10"
+      - "2026-10-14"
+      - "2026-11-12"
+      - "2026-12-10"
+
+  # ── Nonfarm Payrolls (monthly, typically 1st Friday) ──
+  - name: "Nonfarm Payrolls"
+    category: MACRO
+    impact: HIGH
+    affected: ["ALL"]
+    embargo_sessions: 1
+    dates:
+      - "2026-01-09"
+      - "2026-02-06"
+      - "2026-03-06"
+      - "2026-04-03"
+      - "2026-05-08"
+      - "2026-06-05"
+      - "2026-07-02"
+      - "2026-08-07"
+      - "2026-09-04"
+      - "2026-10-02"
+      - "2026-11-06"
+      - "2026-12-04"
+
+  # ── OPEC+ Meetings (energy-specific) ──
+  - name: "OPEC+ Meeting"
+    category: SECTOR
+    impact: HIGH
+    affected: ["XLE", "XOP", "OIH"]
+    embargo_sessions: 1
+    dates:
+      - "2026-03-03"
+      - "2026-06-05"
+      - "2026-09-04"
+      - "2026-12-04"
+
+  # ── Earnings Season Peaks (reduce confidence, no embargo) ──
+  - name: "Earnings Season Peak"
+    category: EARNINGS
+    impact: MEDIUM
+    affected: ["ALL"]
+    embargo_sessions: 0
+    # Approximate weeks 2-4 of reporting month (start dates)
+    dates:
+      - "2026-01-12"
+      - "2026-04-13"
+      - "2026-07-13"
+      - "2026-10-12"
+
+# Shock detection thresholds (for unscheduled events)
+shock:
+  # Multi-sector selloff: fraction of sectors with 1d return < -1σ
+  broad_selloff_sector_fraction: 0.70
+  broad_selloff_sigma: 1.0
+  # Single-sector dislocation: gap between outlier and median
+  dislocation_sigma: 2.5
+  dislocation_gap_sigma: 2.0
+  # VIX jump thresholds
+  vix_jump_points: 3.0
+  vix_jump_pct: 0.15
+  # Volume surge: RVOL threshold across multiple sectors
+  volume_surge_rvol: 2.0
+  volume_surge_min_sectors: 6
+  # Earnings season duration (trading days from start date)
+  earnings_season_duration_days: 15

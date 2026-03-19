@@ -165,3 +165,24 @@ industries:
 # FRED series IDs
 fred:
   hy_oas: "BAMLH0A0HYM2"
+
+# Commodity tickers for regime gate enhancement
+commodities:
+  oil_wti: "CL=F"        # WTI Crude futures
+  oil_brent: "BZ=F"      # Brent Crude futures
+  gold: "GC=F"           # Gold futures
+
+# Top 5 holdings per sector ETF — for concentration monitor
+# Updated quarterly. Source: SSGA/iShares fund pages.
+sector_leaders:
+  XLK: ["AAPL", "MSFT", "NVDA", "AVGO", "CRM"]
+  XLV: ["LLY", "UNH", "JNJ", "ABBV", "MRK"]
+  XLF: ["BRK-B", "JPM", "V", "MA", "BAC"]
+  XLE: ["XOM", "CVX", "COP", "EOG", "SLB"]
+  XLI: ["GE", "RTX", "HON", "CAT", "UNP"]
+  XLU: ["NEE", "SO", "DUK", "CEG", "SRE"]
+  XLRE: ["PLD", "AMT", "EQIX", "WELL", "SPG"]
+  XLC: ["META", "GOOGL", "NFLX", "T", "DIS"]
+  XLY: ["AMZN", "TSLA", "HD", "MCD", "LOW"]
+  XLP: ["PG", "COST", "WMT", "KO", "PEP"]
+  XLB: ["LIN", "SHW", "FCX", "APD", "ECL"]
