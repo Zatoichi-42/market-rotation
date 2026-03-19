@@ -120,6 +120,22 @@ def render_regime_panel(result: dict):
             f"<h1 style='color: {color}; margin-bottom: 0;'>{regime.state.value}</h1>",
             unsafe_allow_html=True,
         )
+        # Catalyst gate badge
+        catalyst = result.get("catalyst")
+        if catalyst:
+            cat_badges = {
+                "Clear": ("✓ CLEAR", "#22c55e"),
+                "Caution": ("⚡ CAUTION", "#eab308"),
+                "Embargo": ("🚫 EMBARGO", "#ef4444"),
+                "Shock Pause": ("⏸ SHOCK PAUSE", "#a78bfa"),
+            }
+            badge_text, badge_color = cat_badges.get(catalyst.action.value, ("—", "#888"))
+            st.markdown(
+                f"<span style='background:{badge_color};color:black;padding:3px 10px;"
+                f"border-radius:4px;font-weight:bold;font-size:0.9em;'>{badge_text}</span>"
+                f"&nbsp; {catalyst.explanation[:120]}",
+                unsafe_allow_html=True,
+            )
         st.markdown(
             f"<div style='font-size: 1.15em; line-height: 1.6;'>{regime.explanation}</div>",
             unsafe_allow_html=True,

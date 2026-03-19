@@ -34,6 +34,8 @@ def classify_state(
     delta_history: list[float],
     settings: dict,
     reversal_score: ReversalScoreReading | None = None,
+    concentration=None,
+    catalyst_confidence_modifier: int = 0,
 ) -> StateClassification:
     """
     Classify a single sector's analysis state.
@@ -46,14 +48,17 @@ def classify_state(
         pump_percentile: Pump score percentile (0-100) across all sectors
         delta_history: Recent pump delta values (newest last)
         settings: State classifier settings from config
-        reversal_score: Optional ReversalScoreReading (Phase 2). When None, Phase 1 behavior.
+        reversal_score: Optional ReversalScoreReading (Phase 2).
+        concentration: Optional ConcentrationReading. When CONCENTRATED_HEALTHY,
+                       require reversal_score.above_75th before Exhaustion transition.
+        catalyst_confidence_modifier: Catalyst gate penalty (negative int).
     """
     ticker = pump.ticker
     name = pump.name
 
     # Determine new state
     state = _determine_state(pump, prior, rs_rank, pump_percentile, delta_history, settings,
-                             reversal_score=reversal_score)
+                             reversal_score=reversal_score, concentration=concentration)
 
     # Track sessions in state
     if prior and state == prior.state:
@@ -68,7 +73,9 @@ def classify_state(
 
     # Compute confidence
     confidence = _compute_confidence(pump, regime, rs_rank, pump_percentile, delta_history, state,
-                                     reversal_score=reversal_score)
+                                     reversal_score=reversal_score,
+                                     concentration=concentration,
+                                     catalyst_confidence_modifier=catalyst_confidence_modifier)
 
     # Prior state reference
     prior_state = prior.state if prior else None
@@ -95,6 +102,8 @@ def classify_all_sectors(
     delta_histories: dict[str, list[float]],
     settings: dict,
     reversal_scores: dict[str, ReversalScoreReading] | None = None,
+    concentrations: dict | None = None,
+    catalyst_confidence_modifier: int = 0,
 ) -> dict[str, StateClassification]:
     """Classify all sectors. Returns dict[ticker, StateClassification]."""
     results = {}
@@ -104,12 +113,15 @@ def classify_all_sectors(
         pctl = pump_percentiles.get(ticker, 50.0)
         hist = delta_histories.get(ticker, [])
         rev = reversal_scores.get(ticker) if reversal_scores else None
+        conc = concentrations.get(ticker) if concentrations else None
 
         results[ticker] = classify_state(
             pump=pump, prior=prior, regime=regime,
             rs_rank=rank, pump_percentile=pctl,
             delta_history=hist, settings=settings,
             reversal_score=rev,
+            concentration=conc,
+            catalyst_confidence_modifier=catalyst_confidence_modifier,
         )
     return results
 
@@ -126,6 +138,7 @@ def _determine_state(
     delta_history: list[float],
     settings: dict,
     reversal_score: ReversalScoreReading | None = None,
+    concentration=None,
 ) -> AnalysisState:
     """Core state determination logic."""
     score = pump.pump_score
@@ -182,9 +195,19 @@ def _determine_state(
             and delta < -_DELTA_NEAR_ZERO and rs_rank >= 7):
         return AnalysisState.OVERT_DUMP
 
-    # ── DISTRIBUTION: was strong, now fading ──
+    # ── EXHAUSTION: was strong, now fading ──
+    # When concentration is CONCENTRATED_HEALTHY, require reversal confirmation
+    # before allowing Exhaustion (suppress false exhaustion in narrow markets)
     if (prior_state in (AnalysisState.OVERT_PUMP, AnalysisState.ACCUMULATION)
             and consec_nonpositive >= min_dist_nonpos):
+        if concentration is not None and hasattr(concentration, 'regime'):
+            from engine.schemas import ConcentrationRegime
+            if concentration.regime == ConcentrationRegime.CONCENTRATED_HEALTHY:
+                # Only allow Exhaustion if reversal score also confirms
+                if reversal_score is not None and reversal_score.above_75th:
+                    return AnalysisState.EXHAUSTION
+                else:
+                    return prior_state  # Suppress — leaders still healthy
         return AnalysisState.EXHAUSTION
 
     # ── ACCUMULATION: positive delta or building momentum ──
@@ -232,6 +255,8 @@ def _compute_confidence(
     delta_history: list[float],
     state: AnalysisState,
     reversal_score: ReversalScoreReading | None = None,
+    concentration=None,
+    catalyst_confidence_modifier: int = 0,
 ) -> int:
     """Compute confidence score (10-95)."""
     confidence = 60  # Base
@@ -274,6 +299,13 @@ def _compute_confidence(
         elif not reversal_score.above_75th and pump_delta > _DELTA_NEAR_ZERO:
             # Confirming: pump rising, low reversal risk → boost
             confidence += 5
+
+    # Concentration modifier
+    if concentration is not None and hasattr(concentration, 'participation_modifier'):
+        confidence += concentration.participation_modifier
+
+    # Catalyst modifier
+    confidence += catalyst_confidence_modifier
 
     # Regime overlay
     if regime == RegimeState.HOSTILE:

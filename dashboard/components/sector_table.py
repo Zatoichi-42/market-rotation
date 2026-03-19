@@ -90,8 +90,14 @@ def render_sector_table(result: dict):
                    "20d Trend": spark,
                    "Perf 5d": f"{p5:+.2%}", "Perf 20d": f"{p20:+.2%}", "Perf 60d": f"{p60:+.2%}",
                    "Composite": f"{r.rs_composite:.1f}"}
+        # Concentration badge
+        conc_map = result.get("concentrations", {})
+        conc = conc_map.get(r.ticker)
+        conc_str = conc.regime.value.split()[-1] if conc else "—"  # "Healthy"/"Fragile"/"Unhealthy"
+
         row.update({"Pump": f"{pump_score:.2f}", "Delta": f"{pump_delta:+.3f}",
                      "Rev": rev_str, "Rev %ile": rev_pct,
+                     "Conc": conc_str,
                      "State": state_val, "Conf": f"{state_conf}%"})
         rows.append(row)
 

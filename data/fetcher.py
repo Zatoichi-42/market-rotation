@@ -47,7 +47,13 @@ def fetch_all(config: dict, force_refresh: bool = False) -> dict:
     period = config.get("data", {}).get("fetch_period", "2y")
     # Include industry tickers from config if present, else use defaults
     industry_tickers = [ind["ticker"] for ind in config.get("industries", [])] or _INDUSTRY_TICKERS
-    all_tickers = _MARKET_TICKERS + _SECTOR_TICKERS + industry_tickers
+    # Sector leader tickers for concentration monitoring
+    leader_tickers = []
+    for leaders in config.get("sector_leaders", {}).values():
+        leader_tickers.extend(leaders)
+    # Commodity tickers for regime enhancement
+    commodity_tickers = list(config.get("commodities", {}).values())
+    all_tickers = _MARKET_TICKERS + _SECTOR_TICKERS + industry_tickers + leader_tickers + commodity_tickers
     # Deduplicate while preserving order
     seen = set()
     all_tickers = [t for t in all_tickers if not (t in seen or seen.add(t))]

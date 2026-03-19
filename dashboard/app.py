@@ -23,6 +23,8 @@ from engine.industry_state import classify_all_industries
 from engine.reversal_score import compute_reversal_scores_batch
 from engine.pump_score import compute_pump_score
 from engine.state_classifier import classify_all_sectors
+from engine.catalyst_gate import load_catalyst_calendar, assess_catalyst
+from engine.concentration_monitor import compute_concentration_all
 from engine.schemas import (
     DailySnapshot, PumpScoreReading, RegimeState,
 )
@@ -78,6 +80,23 @@ def run_pipeline():
 
     regime = classify_regime_from_data(vix_val, vix3m_val, bz, credit_z, settings["regime"],
                                        fred_hy_oas_value=fred_oas_bps)
+
+    # Catalyst Gate (between regime and state classifier)
+    catalysts = load_catalyst_calendar()
+    today_str = prices.index[-1].strftime("%Y-%m-%d")
+    catalyst_assessment = assess_catalyst(
+        today_str, prices, catalysts, data["vix"],
+        catalyst_settings=settings.get("catalyst"),
+        shock_settings=settings.get("catalyst"),
+    )
+
+    # Concentration Monitor
+    sector_leaders = universe.get("sector_leaders", {})
+    concentrations = compute_concentration_all(
+        prices, sector_leaders, ew_cw_zscore=bz,
+        settings=settings.get("concentration"),
+    )
+    concentration_map = {c.sector_ticker: c for c in concentrations}
 
     # RS
     rs_cfg = settings["rs"]
@@ -216,6 +235,8 @@ def run_pipeline():
         delta_histories=delta_histories,
         settings=settings["state"],
         reversal_scores=reversal_map,
+        concentrations=concentration_map,
+        catalyst_confidence_modifier=catalyst_assessment.confidence_modifier,
     )
 
     # Industry states from multi-timeframe RS pattern
@@ -240,6 +261,8 @@ def run_pipeline():
         "credit_z": credit_z,
         "credit": credit,
         "fred_hy_oas": data.get("fred_hy_oas"),
+        "catalyst": catalyst_assessment,
+        "concentrations": concentration_map,
         "industry_rs": industry_rs_readings,
         "industry_states": industry_states,
         "reversal_scores": reversal_readings,
@@ -251,6 +274,10 @@ def main():
     st.title("Pump Rotation System")
 
     result = run_pipeline()
+
+    # Export button in sidebar
+    from dashboard.components.export import render_export_button
+    render_export_button(result)
 
     prices_last = result["prices"].index[-1].strftime("%Y-%m-%d")
     st.caption(
@@ -276,10 +303,14 @@ def main():
     with tab2:
         from dashboard.components.sector_table import render_sector_table
         render_sector_table(result)
+        from dashboard.components.performance_spectrum import render_sector_spectrum
+        render_sector_spectrum(result)
 
     with tab3:
         from dashboard.components.industry_panel import render_industry_panel
         render_industry_panel(result)
+        from dashboard.components.performance_spectrum import render_industry_spectrum
+        render_industry_spectrum(result)
 
     with tab4:
         from dashboard.components.breadth_chart import render_breadth_chart
