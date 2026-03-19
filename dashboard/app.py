@@ -148,6 +148,17 @@ def run_pipeline():
     available_industries = [i for i in industries_cfg if i["ticker"] in prices.columns]
     industry_rs_readings = compute_industry_rs(prices, available_industries) if available_industries else []
 
+    # Compute industry pump score history for real deltas (same pattern as sectors)
+    ind_score_history = {ir.ticker: [] for ir in industry_rs_readings}
+    for i in range(max(0, len(prices) - lookback), len(prices)):
+        day_prices = prices.iloc[:i+1]
+        if len(day_prices) < 20:
+            continue
+        day_ind_rs = compute_industry_rs(day_prices, available_industries) if available_industries else []
+        for ir in day_ind_rs:
+            sc = compute_pump_score(ir.industry_composite, 50.0, 50.0, pump_weights)
+            ind_score_history[ir.ticker].append(sc)
+
     # Reversal Scores (Phase 2) — with rolling history for real percentiles
     from engine.reversal_score import compute_reversal_score
     rev_settings = settings.get("reversal", {})
@@ -177,16 +188,20 @@ def run_pipeline():
     )
     reversal_map = {r.ticker: r for r in reversal_readings}
 
-    # Add industry pump scores (use industry_composite as RS pillar)
+    # Add industry pump scores with real deltas from history
     for ir in industry_rs_readings:
         if ir.ticker not in pumps:
-            ind_score = compute_pump_score(ir.industry_composite, 50.0, 50.0, pump_weights)
+            hist = ind_score_history.get(ir.ticker, [])
+            current_score = hist[-1] if hist else compute_pump_score(ir.industry_composite, 50.0, 50.0, pump_weights)
+            deltas = [hist[j] - hist[j-1] for j in range(1, len(hist))] if len(hist) >= 2 else []
+            delta = deltas[-1] if deltas else 0.0
+            d5 = sum(deltas[-5:]) / len(deltas[-5:]) if deltas else 0.0
+            delta_histories[ir.ticker] = deltas if deltas else [0.0]
             pumps[ir.ticker] = PumpScoreReading(
                 ticker=ir.ticker, name=ir.name,
                 rs_pillar=ir.industry_composite, participation_pillar=50.0, flow_pillar=50.0,
-                pump_score=ind_score, pump_delta=0.0, pump_delta_5d_avg=0.0,
+                pump_score=current_score, pump_delta=delta, pump_delta_5d_avg=d5,
             )
-            delta_histories[ir.ticker] = [0.0]
 
     # State Classifier (sectors + industries, with reversal scores)
     all_ranks = {r.ticker: r.rs_rank for r in rs_readings}
@@ -229,8 +244,8 @@ def main():
     result = run_pipeline()
 
     # Tab layout
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-        "Regime Gate", "Sector Rankings", "Industries", "Breadth", "Replay", "Debug"
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+        "Regime Gate", "Sector Rankings", "Industries", "Breadth", "Today", "Replay", "Debug"
     ])
 
     with tab1:
@@ -255,10 +270,14 @@ def main():
         render_breadth_chart(result)
 
     with tab5:
+        from dashboard.components.interpretation_panel import render_interpretation_panel
+        render_interpretation_panel(result)
+
+    with tab6:
         from dashboard.components.replay_panel import render_replay_panel
         render_replay_panel(result)
 
-    with tab6:
+    with tab7:
         from dashboard.components.debug_panel import render_debug_panel
         render_debug_panel(result)
 

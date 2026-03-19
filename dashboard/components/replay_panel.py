@@ -41,15 +41,17 @@ def render_replay_panel(result: dict):
     if "replay_idx" not in st.session_state:
         st.session_state.replay_idx = len(available) - 1
 
+    def _go_prev():
+        st.session_state.replay_idx = max(0, st.session_state.replay_idx - 1)
+
+    def _go_next():
+        st.session_state.replay_idx = min(len(available) - 1, st.session_state.replay_idx + 1)
+
     nav_l, nav_s, nav_r = st.columns([1, 8, 1])
     with nav_l:
-        if st.button("◄", key="rp_prev"):
-            st.session_state.replay_idx = max(0, st.session_state.replay_idx - 1)
-            st.rerun()
+        st.button("◄ Prev", key="rp_prev", on_click=_go_prev)
     with nav_r:
-        if st.button("►", key="rp_next"):
-            st.session_state.replay_idx = min(len(available) - 1, st.session_state.replay_idx + 1)
-            st.rerun()
+        st.button("Next ►", key="rp_next", on_click=_go_next)
     with nav_s:
         idx = st.slider("Date", 0, len(available) - 1, st.session_state.replay_idx, format="", key="rp_slider")
         if idx != st.session_state.replay_idx:
