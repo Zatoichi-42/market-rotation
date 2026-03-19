@@ -172,20 +172,20 @@ def _determine_state(
         return AnalysisState.OVERT_PUMP
 
     # ── OVERT DUMP: via reversal score (Distribution + high reversal) ──
-    if (prior_state == AnalysisState.DISTRIBUTION
+    if (prior_state == AnalysisState.EXHAUSTION
             and reversal_score is not None
             and reversal_score.above_75th):
         return AnalysisState.OVERT_DUMP
 
     # ── OVERT DUMP: continued decline + bottom rank ──
-    if (prior_state in (AnalysisState.DISTRIBUTION, AnalysisState.OVERT_DUMP)
+    if (prior_state in (AnalysisState.EXHAUSTION, AnalysisState.OVERT_DUMP)
             and delta < -_DELTA_NEAR_ZERO and rs_rank >= 7):
         return AnalysisState.OVERT_DUMP
 
     # ── DISTRIBUTION: was strong, now fading ──
     if (prior_state in (AnalysisState.OVERT_PUMP, AnalysisState.ACCUMULATION)
             and consec_nonpositive >= min_dist_nonpos):
-        return AnalysisState.DISTRIBUTION
+        return AnalysisState.EXHAUSTION
 
     # ── ACCUMULATION: positive delta or building momentum ──
     if delta > _DELTA_NEAR_ZERO:

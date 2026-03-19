@@ -8,7 +8,7 @@ from engine.turnover_filter import check_turnover, find_rotation_candidates
 SETTINGS = {
     "min_delta_advantage": 0.08,
     "min_persistence_sessions": 3,
-    "exempt_states": ["Distribution", "Ambiguous"],
+    "exempt_states": ["Exhaustion", "Ambiguous"],
 }
 
 
@@ -47,7 +47,7 @@ class TestTurnoverFilter:
         result = check_turnover(
             "XLV", "XLK",
             pump_deltas={"XLV": [0.04] * 5, "XLK": [0.01] * 5},
-            current_states={"XLK": AnalysisState.DISTRIBUTION},
+            current_states={"XLK": AnalysisState.EXHAUSTION},
             settings=SETTINGS,
         )
         assert result.passes_filter is True

@@ -116,7 +116,7 @@ def explain_state(
             f"Pump score {score:.2f} with delta {delta:+.3f} — "
             f"momentum building, participation expanding."
         )
-    elif state == AnalysisState.DISTRIBUTION:
+    elif state == AnalysisState.EXHAUSTION:
         parts.append(
             f"Pump score {score:.2f} with delta {delta:+.3f} — "
             f"momentum fading, watch for rotation signal."

@@ -109,3 +109,137 @@ def render_debug_panel(result: dict):
         if not vix_df.empty:
             vix_df["Ratio"] = vix_df["VIX"] / vix_df["VIX3M"]
             st.dataframe(vix_df, width="stretch")
+
+    # ── State & Signal Reference ──────────────────────
+    with st.expander("State & Signal Reference (exhaustive)", expanded=False):
+        _render_state_reference()
+
+
+def _render_state_reference():
+    """Exhaustive reference for every state, signal, and color."""
+    import pandas as pd
+    from dashboard.components.style_utils import STATE_COLORS, STATE_BAR_COLORS, color_row_by_state
+
+    st.markdown("### 5-State Model")
+    st.markdown(
+        "**Spectrum:** Overt Dump (deep red) → Exhaustion (light red) → "
+        "Ambiguous (none) → Accumulation (light green) → Overt Pump (deep green)"
+    )
+
+    states = [
+        {
+            "State": "Overt Pump",
+            "Color": "Deep Green",
+            "Trigger": "Pump percentile ≥ 75, RS rank ≤ 3, delta positive",
+            "Meaning": "Strongest institutional inflow. Clear sector leadership. Top quartile momentum.",
+            "Action": "Primary long candidate. Full position size.",
+            "Example": "XLE at rank #1, pump score 0.85, delta +0.04 for 8 sessions",
+        },
+        {
+            "State": "Accumulation",
+            "Color": "Light Green",
+            "Trigger": "Pump delta positive (building momentum)",
+            "Meaning": "Early-stage momentum building. Participation expanding. Not yet confirmed as leader.",
+            "Action": "Watch for continuation. Potential add on breakout.",
+            "Example": "XLV delta turning positive, climbing from rank #6 to #4",
+        },
+        {
+            "State": "Ambiguous",
+            "Color": "None (transparent)",
+            "Trigger": "Mixed deltas (2+ positive AND 2+ negative in last 5 sessions)",
+            "Meaning": "Conflicting signals. No clear direction. Flip-flopping momentum.",
+            "Action": "No trade. Wait for clarity. Do not force a signal.",
+            "Example": "XLI delta alternating +0.02, -0.01, +0.01, -0.02, +0.005",
+        },
+        {
+            "State": "Exhaustion",
+            "Color": "Light Red",
+            "Trigger": "Was Overt Pump or Accumulation, then delta nonpositive for 3+ sessions",
+            "Meaning": "Former leader losing momentum. Pump fading. Watch for rotation.",
+            "Action": "Tighten stops. Reduce position. Look for rotation target.",
+            "Example": "XLK was rank #1, pump delta negative for 4 sessions, RS slope turning down",
+        },
+        {
+            "State": "Overt Dump",
+            "Color": "Deep Red",
+            "Trigger": "Exhaustion + reversal score > 75th percentile, OR continued decline + rank ≥ 7",
+            "Meaning": "Active capital rotation OUT. Failed breakouts. Institutional selling confirmed.",
+            "Action": "Exit longs. Potential short candidate. Pair against Overt Pump.",
+            "Example": "XLB rank #11, pump delta -0.06, reversal score 0.72 (85th percentile)",
+        },
+    ]
+
+    df = pd.DataFrame(states)
+    styled = df.style.apply(color_row_by_state, axis=1)
+    st.dataframe(styled, width="stretch", hide_index=True)
+
+    st.markdown("---")
+    st.markdown("### Regime Gate Signals")
+    signals = [
+        {"Signal": "VIX Level", "NORMAL": "< 20", "FRAGILE": "20–30", "HOSTILE": "≥ 30",
+         "Source": "^VIX via yfinance (live)"},
+        {"Signal": "Term Structure", "NORMAL": "< 0.95 (contango)", "FRAGILE": "0.95–1.05 (flat)", "HOSTILE": "≥ 1.05 (backwardation)",
+         "Source": "^VIX / ^VIX3M (live)"},
+        {"Signal": "Breadth", "NORMAL": "z > 0", "FRAGILE": "0 ≥ z > -1", "HOSTILE": "z ≤ -1",
+         "Source": "RSP/SPY ratio z-score (live)"},
+        {"Signal": "Credit", "NORMAL": "z > -0.5", "FRAGILE": "-0.5 ≥ z > -1.5", "HOSTILE": "z ≤ -1.5",
+         "Source": "HYG/LQD ratio z-score (live), FRED OAS (1-2d lag)"},
+    ]
+    st.dataframe(pd.DataFrame(signals), width="stretch", hide_index=True)
+
+    st.markdown("### Gate Aggregation")
+    st.markdown(
+        "- **HOSTILE**: ≥ 2 hostile signals\n"
+        "- **FRAGILE**: ≥ 1 hostile OR ≥ 2 fragile signals\n"
+        "- **NORMAL**: everything else\n"
+        "- Boundary rule: exact threshold value goes to the WORSE bucket"
+    )
+
+    st.markdown("---")
+    st.markdown("### Reversal Score Sub-Signals")
+    rev_signals = [
+        {"Pillar": "Breadth Deterioration (40%)", "Sub-Signal": "RS Slope Reversal",
+         "What It Measures": "Was RS slope positive → now negative?", "Range": "0–100"},
+        {"Pillar": "Breadth Deterioration (40%)", "Sub-Signal": "Participation Decay",
+         "What It Measures": "% of days outperforming SPY (declining = bad)", "Range": "0–1"},
+        {"Pillar": "Price Break Quality (30%)", "Sub-Signal": "Failed Breakout Rate",
+         "What It Measures": "New 20d highs that reversed within 3 sessions", "Range": "0–1"},
+        {"Pillar": "Price Break Quality (30%)", "Sub-Signal": "Gap Fade Rate",
+         "What It Measures": "Gap-ups that closed below open (faded)", "Range": "0–1"},
+        {"Pillar": "Price Break Quality (30%)", "Sub-Signal": "CLV Trend",
+         "What It Measures": "Close Location Value: (close-low)/(high-low). Declining = bad", "Range": "0–1"},
+        {"Pillar": "Price Break Quality (30%)", "Sub-Signal": "Follow-Through",
+         "What It Measures": "% of up-days followed by another up-day", "Range": "0–1"},
+        {"Pillar": "Crowding/Stretch (30%)", "Sub-Signal": "Distance from MA",
+         "What It Measures": "Standard deviations above/below 20d MA", "Range": "σ"},
+        {"Pillar": "Crowding/Stretch (30%)", "Sub-Signal": "RVOL",
+         "What It Measures": "Current volume / 20d average volume", "Range": "x"},
+        {"Pillar": "Crowding/Stretch (30%)", "Sub-Signal": "Price Acceleration",
+         "What It Measures": "5d rate of change of 20d rate of change (parabolic detection)", "Range": "ROC"},
+    ]
+    st.dataframe(pd.DataFrame(rev_signals), width="stretch", hide_index=True)
+
+    st.markdown("---")
+    st.markdown("### Transition Pressures")
+    pressures = [
+        {"Pressure": "UP", "Condition": "Delta > 0.005 for 3+ consecutive sessions"},
+        {"Pressure": "STABLE", "Condition": "Delta near zero or mixed direction"},
+        {"Pressure": "DOWN", "Condition": "Delta < -0.005 for 3+ consecutive sessions"},
+        {"Pressure": "BREAK", "Condition": "State changed this session"},
+    ]
+    st.dataframe(pd.DataFrame(pressures), width="stretch", hide_index=True)
+
+    st.markdown("---")
+    st.markdown("### Confidence Adjustments")
+    adjustments = [
+        {"Factor": "Strong aligned signals (top 3 rank + top quartile pump)", "Effect": "+15"},
+        {"Factor": "Consistent delta direction (3+ sessions same sign)", "Effect": "+5 to +10"},
+        {"Factor": "Conflicting pillars (spread > 50)", "Effect": "-15"},
+        {"Factor": "Ambiguous state", "Effect": "-15"},
+        {"Factor": "Reversal high + pump rising (conflicting)", "Effect": "-15"},
+        {"Factor": "Reversal low + pump rising (confirming)", "Effect": "+5"},
+        {"Factor": "FRAGILE regime", "Effect": "-20"},
+        {"Factor": "HOSTILE regime", "Effect": "-30"},
+        {"Factor": "Clamped range", "Effect": "Always 10–95"},
+    ]
+    st.dataframe(pd.DataFrame(adjustments), width="stretch", hide_index=True)

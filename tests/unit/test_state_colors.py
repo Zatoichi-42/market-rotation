@@ -17,8 +17,8 @@ class TestFiveStateModel:
     def test_overt_dump_exists(self):
         assert AnalysisState.OVERT_DUMP.value == "Overt Dump"
 
-    def test_distribution_exists(self):
-        assert AnalysisState.DISTRIBUTION.value == "Distribution"
+    def test_exhaustion_exists(self):
+        assert AnalysisState.EXHAUSTION.value == "Exhaustion"
 
     def test_ambiguous_exists(self):
         assert AnalysisState.AMBIGUOUS.value == "Ambiguous"
@@ -30,16 +30,16 @@ class TestFiveStateModel:
         assert AnalysisState.OVERT_PUMP.value == "Overt Pump"
 
     def test_no_broadening(self):
-        """Broadening was removed in the 5-state model."""
+        """Broadening was merged into Accumulation."""
         assert not hasattr(AnalysisState, "BROADENING")
-
-    def test_no_exhaustion(self):
-        """Exhaustion was renamed to Distribution."""
-        assert not hasattr(AnalysisState, "EXHAUSTION")
 
     def test_no_rotation(self):
         """Rotation was renamed to Overt Dump."""
         assert not hasattr(AnalysisState, "ROTATION")
+
+    def test_no_distribution(self):
+        """Distribution was renamed back to Exhaustion."""
+        assert not hasattr(AnalysisState, "DISTRIBUTION")
 
 
 class TestStateColors:
@@ -61,8 +61,8 @@ class TestStateColors:
         bg, fg = STATE_COLORS["Overt Dump"]
         assert "1d" in bg  # #7f1d1d contains "1d"
 
-    def test_distribution_is_light_red(self):
-        bg, fg = STATE_COLORS["Distribution"]
+    def test_exhaustion_is_light_red(self):
+        bg, fg = STATE_COLORS["Exhaustion"]
         assert bg != ""
 
     def test_ambiguous_has_no_color(self):

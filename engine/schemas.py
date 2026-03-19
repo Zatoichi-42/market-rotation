@@ -24,7 +24,7 @@ class SignalLevel(Enum):
 
 class AnalysisState(Enum):
     OVERT_DUMP = "Overt Dump"        # Deep red — active rotation out
-    DISTRIBUTION = "Distribution"     # Light red — momentum fading
+    EXHAUSTION = "Exhaustion"         # Light red — momentum fading
     AMBIGUOUS = "Ambiguous"           # No color — conflicting signals
     ACCUMULATION = "Accumulation"     # Light green — momentum building
     OVERT_PUMP = "Overt Pump"        # Deep green — strongest inflow

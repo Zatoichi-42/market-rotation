@@ -22,7 +22,7 @@ _SECTOR_NAMES = {
 # States where we expect positive forward RS
 _BULLISH_STATES = {"Overt Pump", "Accumulation"}
 # States where we expect negative forward RS or exit
-_BEARISH_STATES = {"Distribution", "Overt Dump"}
+_BEARISH_STATES = {"Exhaustion", "Overt Dump"}
 
 
 def _label(ticker):
@@ -230,7 +230,7 @@ def render_signal_reliability(result: dict):
         "Red = state prediction was wrong."
     )
 
-    states_list = ["Overt Pump", "Accumulation", "Ambiguous", "Distribution", "Overt Dump"]
+    states_list = ["Overt Pump", "Accumulation", "Ambiguous", "Exhaustion", "Overt Dump"]
     lookback_labels = [label for _, label, _ in lookbacks]
 
     hm_z = []

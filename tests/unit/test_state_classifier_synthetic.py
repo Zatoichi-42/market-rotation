@@ -89,12 +89,12 @@ class TestStateAssignment:
             delta_history=[0.01, -0.01, -0.02, -0.03],
             settings=SETTINGS,
         )
-        assert result.state == AnalysisState.DISTRIBUTION
+        assert result.state == AnalysisState.EXHAUSTION
 
     def test_rotation(self):
         """Score declining + rank dropping → Rotation."""
         pump = _pump(score=0.45, delta=-0.06, delta_5d=-0.04)
-        prior = _prior(state=AnalysisState.DISTRIBUTION, sessions=4)
+        prior = _prior(state=AnalysisState.EXHAUSTION, sessions=4)
         result = classify_state(
             pump=pump, prior=prior, regime=RegimeState.NORMAL,
             rs_rank=8, pump_percentile=40.0,
@@ -151,7 +151,7 @@ class TestTransitionPressure:
         """Delta < 0 for 3+ sessions, state unchanged → DOWN."""
         pump = _pump(score=0.50, delta=-0.03, delta_5d=-0.02)
         # Prior already EXHAUSTION so state stays the same → no BREAK
-        prior = _prior(state=AnalysisState.DISTRIBUTION, sessions=4)
+        prior = _prior(state=AnalysisState.EXHAUSTION, sessions=4)
         result = classify_state(
             pump=pump, prior=prior, regime=RegimeState.NORMAL,
             rs_rank=3, pump_percentile=50.0,

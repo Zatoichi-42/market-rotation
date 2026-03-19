@@ -204,11 +204,11 @@ class TestExplainState:
         assert "72" in result or "confidence" in result.lower()
 
     def test_exhaustion_explanation(self):
-        sc = _make_state(state=AnalysisState.DISTRIBUTION, confidence=58, sessions=4,
+        sc = _make_state(state=AnalysisState.EXHAUSTION, confidence=58, sessions=4,
                          pressure=TransitionPressure.DOWN)
         pump = _make_pump(score=0.82, delta=-0.04)
         result = explain_state(sc, pump, RegimeState.NORMAL)
-        assert "Distribution" in result
+        assert "Exhaustion" in result
 
     def test_overt_pump_explanation(self):
         sc = _make_state(state=AnalysisState.OVERT_PUMP, confidence=80, sessions=10)

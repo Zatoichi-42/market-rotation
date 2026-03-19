@@ -24,7 +24,7 @@ class TestEnums:
 
     def test_analysis_state_values(self):
         assert AnalysisState.OVERT_DUMP.value == "Overt Dump"
-        assert AnalysisState.DISTRIBUTION.value == "Distribution"
+        assert AnalysisState.EXHAUSTION.value == "Exhaustion"
         assert AnalysisState.AMBIGUOUS.value == "Ambiguous"
         assert AnalysisState.ACCUMULATION.value == "Accumulation"
         assert AnalysisState.OVERT_PUMP.value == "Overt Pump"

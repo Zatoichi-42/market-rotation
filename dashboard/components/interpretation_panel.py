@@ -21,13 +21,13 @@ _SECTOR_NAMES = {
 # Deep red → red → yellow → green → deep green (overt dump to overt pump)
 _MOMENTUM_COLORS = {
     "Overt Dump":    "#7f1d1d",   # Deep red
-    "Distribution":  "#ef4444",   # Light red
+    "Exhaustion":  "#ef4444",   # Light red
     "Ambiguous":     "#64748b",   # Gray
     "Accumulation":  "#4ade80",   # Light green
     "Overt Pump":    "#064e3b",   # Deep green
 }
 
-_STATE_ORDER = ["Overt Dump", "Distribution", "Ambiguous", "Accumulation", "Overt Pump"]
+_STATE_ORDER = ["Overt Dump", "Exhaustion", "Ambiguous", "Accumulation", "Overt Pump"]
 
 
 def render_interpretation_panel(result: dict):
@@ -205,11 +205,11 @@ def render_interpretation_panel(result: dict):
         delta = s["pump_delta"]
         if state == "Overt Pump" and delta < -0.005:
             observations.append(
-                f"⚠ **{s['ticker']}** is Overt Pump but delta turned negative ({delta:+.3f}) — watch for distribution."
+                f"⚠ **{s['ticker']}** is Overt Pump but delta turned negative ({delta:+.3f}) — watch for exhaustion."
             )
-        if state == "Distribution" and s["rs_1d"] > 0.01:
+        if state == "Exhaustion" and s["rs_1d"] > 0.01:
             observations.append(
-                f"👀 **{s['ticker']}** is in Distribution but had a strong 1d RS ({s['rs_1d']:+.2%}) — dead cat bounce or reversal?"
+                f"👀 **{s['ticker']}** is in Exhaustion but had a strong 1d RS ({s['rs_1d']:+.2%}) — dead cat bounce or reversal?"
             )
         if state == "Accumulation" and s["rs_1d"] > 0.01:
             observations.append(

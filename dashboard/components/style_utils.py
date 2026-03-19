@@ -1,7 +1,7 @@
 """
 Shared styling — 5-state color model.
 
-Spectrum: Overt Dump (deep red) → Distribution (light red) →
+Spectrum: Overt Dump (deep red) → Exhaustion (light red) →
           Ambiguous (none) → Accumulation (light green) → Overt Pump (deep green)
 """
 from engine.schemas import AnalysisState
@@ -9,7 +9,7 @@ from engine.schemas import AnalysisState
 # Row background + text colors for dark theme
 STATE_COLORS = {
     "Overt Dump":    ("#7f1d1d", "#f87171"),   # Deep red bg, red text
-    "Distribution":  ("#7c2d12", "#fb923c"),   # Light red/orange bg, orange text
+    "Exhaustion":  ("#7c2d12", "#fb923c"),   # Light red/orange bg, orange text
     "Ambiguous":     ("", ""),                  # No color — transparent
     "Accumulation":  ("#064e3b", "#34d399"),   # Light green bg, green text
     "Overt Pump":    ("#052e16", "#22c55e"),   # Deep green bg, bright green text
@@ -18,7 +18,7 @@ STATE_COLORS = {
 # Bar chart colors
 STATE_BAR_COLORS = {
     "Overt Dump":    "#ef4444",   # Red
-    "Distribution":  "#fb923c",   # Orange-red
+    "Exhaustion":  "#fb923c",   # Orange-red
     "Ambiguous":     "#64748b",   # Gray
     "Accumulation":  "#4ade80",   # Light green
     "Overt Pump":    "#22c55e",   # Deep green
@@ -27,7 +27,7 @@ STATE_BAR_COLORS = {
 # Momentum spectrum (for interpretation panel)
 MOMENTUM_COLORS = {
     "Overt Dump":    "#7f1d1d",
-    "Distribution":  "#ef4444",
+    "Exhaustion":  "#ef4444",
     "Ambiguous":     "#64748b",
     "Accumulation":  "#4ade80",
     "Overt Pump":    "#064e3b",
