@@ -1,0 +1,58 @@
+# Data settings
+data:
+  lookback_days: 504        # ~2 years trading days for z-score history
+  fetch_period: "2y"        # yfinance download period
+  cache_expiry_hours: 18    # Re-fetch if cache older than this
+  backfill_years: 3         # For backfill.py: how far back to pull
+
+# RS computation windows
+rs:
+  windows: [5, 20, 60]
+  slope_window: 5
+  composite_weights:         # 5d / 20d / 60d
+    5: 0.20
+    20: 0.50
+    60: 0.30
+
+# Regime gate thresholds
+regime:
+  vix:
+    normal_max: 20
+    fragile_max: 30
+  term_structure:
+    contango_max: 0.95
+    flat_max: 1.05
+  breadth:
+    normal_min_zscore: 0.0
+    fragile_min_zscore: -1.0
+  credit:
+    normal_min_zscore: -0.5
+    fragile_min_zscore: -1.5
+  gate:
+    hostile_threshold: 2
+    fragile_mixed: true
+
+# Normalization
+normalization:
+  zscore_window: 504
+  decay_halflife: 10
+  decay_start_unchanged: 10
+
+# Pump Score pillar weights
+pump_score:
+  rs_weight: 0.40
+  participation_weight: 0.30
+  flow_weight: 0.30
+
+# State classifier
+state:
+  broadening:
+    rs_delta_positive_sessions: 5
+    min_pump_percentile: 50
+  overt_pump:
+    min_pump_percentile: 75
+  exhaustion:
+    pump_delta_nonpositive_sessions: 3
+  ambiguous:
+    conflicting_sessions: 3
+    max_duration: 15
