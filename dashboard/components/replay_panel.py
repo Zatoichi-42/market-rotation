@@ -38,35 +38,36 @@ def render_replay_panel(result: dict):
     st.subheader("History Replay")
 
     # ── Navigation ────────────────────────────────────
-    # Single source of truth: st.number_input for index (no slider/button conflicts)
     max_idx = len(available) - 1
 
-    step_col, nav_l, nav_r, idx_col = st.columns([2, 1, 1, 2])
+    # Initialize
+    if "rp_pos" not in st.session_state:
+        st.session_state.rp_pos = max_idx
+
+    step_map = {"1 day": 1, "5 days": 5, "20 days": 20, "60 days": 60}
+
+    # Buttons use on_click to modify rp_pos BEFORE widgets render
+    def _back():
+        s = step_map.get(st.session_state.get("rp_step_sel2", "1 day"), 1)
+        st.session_state.rp_pos = max(0, st.session_state.rp_pos - s)
+
+    def _fwd():
+        s = step_map.get(st.session_state.get("rp_step_sel2", "1 day"), 1)
+        st.session_state.rp_pos = min(max_idx, st.session_state.rp_pos + s)
+
+    step_col, nav_l, nav_r = st.columns([2, 1, 1])
     with step_col:
-        step_map = {"1 day": 1, "5 days": 5, "20 days": 20, "60 days": 60}
-        step_label = st.selectbox("Step size", list(step_map.keys()), index=0, key="rp_step_sel")
-        step = step_map[step_label]
-
-    # Use number_input as the single source of truth — no on_click, no slider
-    with idx_col:
-        current_idx = st.number_input(
-            "Snapshot #", min_value=0, max_value=max_idx,
-            value=max_idx, step=step, key="rp_num_input",
-        )
-
+        st.selectbox("Step size", list(step_map.keys()), index=0, key="rp_step_sel2")
     with nav_l:
-        if st.button("◄ Back", key="rp_back"):
-            current_idx = max(0, current_idx - step)
-            st.session_state.rp_num_input = current_idx
-            st.rerun()
+        st.button("◄ Back", on_click=_back, key="rp_back5")
     with nav_r:
-        if st.button("Forward ►", key="rp_fwd"):
-            current_idx = min(max_idx, current_idx + step)
-            st.session_state.rp_num_input = current_idx
-            st.rerun()
+        st.button("Forward ►", on_click=_fwd, key="rp_fwd5")
 
+    # Display current position (read-only — buttons control it)
+    current_idx = st.session_state.rp_pos
     sel_date = available[current_idx]
-    st.markdown(f"**{sel_date}** &nbsp; ({available[0]} → {available[-1]}, {len(available)} snapshots)")
+    st.markdown(f"**{sel_date}** &nbsp; (#{current_idx} of {len(available)} | "
+                f"{available[0]} → {available[-1]})")
 
     try:
         snap = load_snapshot(sel_date)
