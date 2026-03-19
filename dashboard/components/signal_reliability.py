@@ -54,6 +54,12 @@ def render_signal_reliability(result: dict):
         st.warning("Not enough snapshots.")
         return
 
+    last_date = prices.index[-1]
+    st.caption(
+        f"Forward returns measured to **{last_date.strftime('%Y-%m-%d')}** "
+        f"(today's latest available price — intraday during market hours)"
+    )
+
     # ── Summary scorecard across all lookbacks ────────
     all_results = []
     for days, label, snap_date in lookbacks:

@@ -109,6 +109,7 @@ def render_replay_panel(result: dict):
     date_strs = prices.index.strftime("%Y-%m-%d").values
     if sel_date in date_strs:
         st.subheader(f"What happened AFTER {sel_date}?")
+        st.caption(f"Forward returns measured to **{prices.index[-1].strftime('%Y-%m-%d')}** (latest available)")
         dloc = prices.index.get_indexer(pd.to_datetime([sel_date]), method="nearest")[0]
 
         for fwd, label in [(10, "10-day"), (20, "20-day")]:

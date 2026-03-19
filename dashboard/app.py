@@ -45,12 +45,13 @@ def load_config():
     return settings, universe
 
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=300)  # 5 min cache — ensures fresh intraday data
 def run_pipeline():
-    """Run the full pipeline and return current snapshot + raw data."""
+    """Run the full pipeline and return current snapshot + raw data.
+    Uses latest available prices (intraday during market hours)."""
     settings, universe = load_config()
     config = {**settings, **universe}
-    data = fetch_all(config)
+    data = fetch_all(config, force_refresh=True)  # Always get latest prices
     prices = data["prices"]
 
     # Regime
@@ -239,9 +240,14 @@ def run_pipeline():
 
 def main():
     st.title("Pump Rotation System")
-    st.caption(f"Last updated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
 
     result = run_pipeline()
+
+    prices_last = result["prices"].index[-1].strftime("%Y-%m-%d")
+    st.caption(
+        f"Pipeline: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} | "
+        f"Price data through: **{prices_last}** (today's latest — refreshes every 5 min)"
+    )
 
     # Tab layout
     tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([

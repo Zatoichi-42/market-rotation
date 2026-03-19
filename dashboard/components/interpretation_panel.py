@@ -44,8 +44,12 @@ def render_interpretation_panel(result: dict):
         return
 
     st.subheader("Today's Market Interpretation")
+    last_date = prices.index[-1]
+    st.caption(f"Using latest prices as of **{last_date.strftime('%Y-%m-%d')}** "
+               f"(intraday during market hours, close after hours)")
 
     # ── Market Summary ────────────────────────────────
+    # 1d = today's latest vs yesterday's close. All metrics use today as endpoint.
     spy_1d = prices["SPY"].pct_change().iloc[-1] if "SPY" in prices.columns else 0
     spy_5d = prices["SPY"].pct_change(5).iloc[-1] if "SPY" in prices.columns and len(prices) > 5 else 0
 

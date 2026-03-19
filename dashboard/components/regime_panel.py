@@ -344,7 +344,8 @@ def render_regime_panel(result: dict):
 
 
 def _render_1d_metrics(result: dict):
-    """Show 1-day changes for key signals."""
+    """Show rolling metrics using TODAY's latest price as endpoint.
+    1d = today vs yesterday. 5d/20d/60d = today vs N days ago."""
     import pandas as pd
     prices = result["prices"]
     vix = result["vix"]
@@ -352,6 +353,10 @@ def _render_1d_metrics(result: dict):
     if len(prices) < 2 or len(vix) < 2:
         st.caption("Insufficient data for 1d metrics.")
         return
+
+    # Confirm we're using today's data
+    last_date = prices.index[-1]
+    st.caption(f"Data as of: **{last_date.strftime('%Y-%m-%d')}** (latest available — intraday during market hours)")
 
     rows = []
 
