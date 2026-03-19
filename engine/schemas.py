@@ -44,6 +44,12 @@ class BreadthSignal(Enum):
     DIVERGING = "DIVERGING"
 
 
+class GroupType(Enum):
+    """Whether a group is a sector or industry."""
+    SECTOR = "sector"
+    INDUSTRY = "industry"
+
+
 # ── Regime Gate ────────────────────────────────────────
 
 @dataclass
@@ -120,6 +126,97 @@ class StateClassification:
     explanation: str
 
 
+# ── Industry RS (Phase 2) ──────────────────────────────
+
+@dataclass
+class IndustryRSReading:
+    ticker: str
+    name: str
+    parent_sector: str
+    group_type: GroupType
+
+    # RS vs SPY
+    rs_5d: float
+    rs_20d: float
+    rs_60d: float
+    rs_slope: float
+    rs_composite: float
+
+    # RS vs parent sector
+    rs_5d_vs_parent: float
+    rs_20d_vs_parent: float
+    rs_60d_vs_parent: float
+    rs_slope_vs_parent: float
+    rs_composite_vs_parent: float
+
+    # Combined industry composite
+    industry_composite: float
+
+    # Ranking
+    rs_rank: int
+    rs_rank_change: int
+    rs_rank_within_sector: int
+
+
+# ── Reversal Score (Phase 2) ──────────────────────────
+
+@dataclass
+class ReversalScoreReading:
+    ticker: str
+    name: str
+
+    breadth_det_pillar: float
+    price_break_pillar: float
+    crowding_pillar: float
+
+    reversal_score: float
+    sub_signals: dict
+    reversal_percentile: float
+    above_75th: bool
+
+
+# ── Turnover Filter (Phase 2) ─────────────────────────
+
+@dataclass
+class TurnoverCheck:
+    candidate_ticker: str
+    current_ticker: str
+    delta_advantage: float
+    persistence_sessions: int
+    current_state_exempt: bool
+    passes_filter: bool
+    reason: str
+
+
+# ── Pump Map Row (Phase 2) ────────────────────────────
+
+@dataclass
+class PumpMapRow:
+    ticker: str
+    name: str
+    group_type: GroupType
+    parent_sector: Optional[str]
+    tier: str
+
+    regime_state: RegimeState
+
+    pump_score: float
+    pump_delta: float
+    pump_delta_5d_avg: float
+
+    reversal_score: float
+    reversal_percentile: float
+
+    analysis_state: AnalysisState
+    transition_pressure: TransitionPressure
+    confidence: int
+
+    rs_composite: float
+    rs_rank: int
+    rs_rank_change: int
+    rs_vs_parent: Optional[float]
+
+
 # ── Snapshot (for replay) ──────────────────────────────
 
 @dataclass
@@ -131,3 +228,7 @@ class DailySnapshot:
     breadth: BreadthReading
     pump_scores: list[PumpScoreReading]
     states: list[StateClassification]
+    # Phase 2 additions (default to empty for backward compat)
+    industry_rs: list = field(default_factory=list)
+    reversal_scores: list = field(default_factory=list)
+    pump_map: list = field(default_factory=list)

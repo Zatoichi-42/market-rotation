@@ -1,6 +1,6 @@
 """
 Streamlit dashboard — main entry point.
-5 panels: Regime, Sector Table, Breadth, Replay, Debug.
+6 tabs: Regime, Sector Table, Industries, Breadth, Replay, Debug.
 """
 import sys
 import os
@@ -18,6 +18,8 @@ from engine.regime_gate import classify_regime_from_data
 from engine.rs_scanner import compute_rs_readings, compute_rs_all
 from engine.breadth import compute_breadth
 from engine.normalizer import compute_zscore, percentile_rank
+from engine.industry_rs import compute_industry_rs
+from engine.reversal_score import compute_reversal_scores_batch
 from engine.pump_score import compute_pump_score
 from engine.state_classifier import classify_all_sectors
 from engine.schemas import (
@@ -141,7 +143,41 @@ def run_pipeline():
         except Exception:
             pass
 
-    # State Classifier
+    # Industry RS (Phase 2)
+    industries_cfg = universe.get("industries", [])
+    available_industries = [i for i in industries_cfg if i["ticker"] in prices.columns]
+    industry_rs_readings = compute_industry_rs(prices, available_industries) if available_industries else []
+
+    # Reversal Scores (Phase 2) — with rolling history for real percentiles
+    from engine.reversal_score import compute_reversal_score
+    rev_settings = settings.get("reversal", {})
+    rev_weights = settings.get("reversal_score", {"breadth_det_weight": 0.40, "price_break_weight": 0.30, "crowding_weight": 0.30})
+    all_tickers_for_rev = [r.ticker for r in rs_readings]
+
+    # Build score history: compute reversal score at 20 historical points
+    rev_history = {t: [] for t in all_tickers_for_rev}
+    hist_step = max(1, (len(prices) - 60) // 20)
+    for i in range(60, len(prices), hist_step):
+        p_slice = prices.iloc[:i+1]
+        h_slice = data["highs"].iloc[:i+1]
+        l_slice = data["lows"].iloc[:i+1]
+        v_slice = data["volumes"].iloc[:i+1]
+        for t in all_tickers_for_rev:
+            if t in p_slice.columns:
+                r = compute_reversal_score(p_slice, h_slice, l_slice, v_slice, t,
+                                           settings=rev_settings, weights=rev_weights)
+                rev_history[t].append(r.reversal_score)
+
+    history_series = {t: pd.Series(scores) for t, scores in rev_history.items() if scores}
+
+    reversal_readings = compute_reversal_scores_batch(
+        prices, data["highs"], data["lows"], data["volumes"],
+        all_tickers_for_rev, settings=rev_settings, weights=rev_weights,
+        history_scores=history_series,
+    )
+    reversal_map = {r.ticker: r for r in reversal_readings}
+
+    # State Classifier (with reversal scores)
     rs_ranks = {r.ticker: r.rs_rank for r in rs_readings}
     pump_pcts = percentile_rank(pd.Series({t: p.pump_score for t, p in pumps.items()}))
     states = classify_all_sectors(
@@ -149,6 +185,7 @@ def run_pipeline():
         rs_ranks=rs_ranks, pump_percentiles=pump_pcts.to_dict(),
         delta_histories=delta_histories,
         settings=settings["state"],
+        reversal_scores=reversal_map,
     )
 
     return {
@@ -166,6 +203,9 @@ def run_pipeline():
         "credit_z": credit_z,
         "credit": credit,
         "fred_hy_oas": data.get("fred_hy_oas"),
+        "industry_rs": industry_rs_readings,
+        "reversal_scores": reversal_readings,
+        "reversal_map": reversal_map,
     }
 
 
@@ -176,8 +216,8 @@ def main():
     result = run_pipeline()
 
     # Tab layout
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "Regime Gate", "Sector Rankings", "Breadth", "Replay", "Debug"
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+        "Regime Gate", "Sector Rankings", "Industries", "Breadth", "Replay", "Debug"
     ])
 
     with tab1:
@@ -189,14 +229,18 @@ def main():
         render_sector_table(result)
 
     with tab3:
+        from dashboard.components.industry_panel import render_industry_panel
+        render_industry_panel(result)
+
+    with tab4:
         from dashboard.components.breadth_chart import render_breadth_chart
         render_breadth_chart(result)
 
-    with tab4:
+    with tab5:
         from dashboard.components.replay_panel import render_replay_panel
         render_replay_panel(result)
 
-    with tab5:
+    with tab6:
         from dashboard.components.debug_panel import render_debug_panel
         render_debug_panel(result)
 

@@ -1,121 +1,41 @@
-"""Panel 2: Sector RS ranked table with sparklines, pump score, state."""
+"""Panel 2: Sector table — RS/Performance toggle, sparklines, heat map, valuations."""
 import streamlit as st
 import plotly.graph_objects as go
+import plotly.express as px
 import pandas as pd
+import numpy as np
 from engine.schemas import AnalysisState
 
-
 _ETF_FULL_NAMES = {
-    "XLK": "Technology Select Sector SPDR",
-    "XLV": "Health Care Select Sector SPDR",
-    "XLF": "Financial Select Sector SPDR",
-    "XLE": "Energy Select Sector SPDR",
-    "XLI": "Industrial Select Sector SPDR",
-    "XLU": "Utilities Select Sector SPDR",
-    "XLRE": "Real Estate Select Sector SPDR",
-    "XLC": "Communication Services Select Sector SPDR",
-    "XLY": "Consumer Discretionary Select Sector SPDR",
-    "XLP": "Consumer Staples Select Sector SPDR",
-    "XLB": "Materials Select Sector SPDR",
-    "SPY": "SPDR S&P 500 ETF Trust",
+    "XLK": "Technology Select Sector SPDR", "XLV": "Health Care Select Sector SPDR",
+    "XLF": "Financial Select Sector SPDR", "XLE": "Energy Select Sector SPDR",
+    "XLI": "Industrial Select Sector SPDR", "XLU": "Utilities Select Sector SPDR",
+    "XLRE": "Real Estate Select Sector SPDR", "XLC": "Communication Services Select Sector SPDR",
+    "XLY": "Consumer Discretionary Select Sector SPDR", "XLP": "Consumer Staples Select Sector SPDR",
+    "XLB": "Materials Select Sector SPDR", "SPY": "SPDR S&P 500 ETF Trust",
     "RSP": "Invesco S&P 500 Equal Weight ETF",
     "HYG": "iShares iBoxx $ High Yield Corporate Bond ETF",
     "LQD": "iShares iBoxx $ Investment Grade Corporate Bond ETF",
-    "QQQ": "Invesco QQQ Trust (Nasdaq-100)",
-    "IWM": "iShares Russell 2000 ETF",
+    "QQQ": "Invesco QQQ Trust (Nasdaq-100)", "IWM": "iShares Russell 2000 ETF",
     "DIA": "SPDR Dow Jones Industrial Average ETF",
 }
 
-_STATE_COLORS = {
-    AnalysisState.ACCUMULATION: "#6699cc",
-    AnalysisState.BROADENING: "#00d4aa",
-    AnalysisState.OVERT_PUMP: "#00ff88",
-    AnalysisState.EXHAUSTION: "#ffa500",
-    AnalysisState.ROTATION: "#ff4444",
-    AnalysisState.AMBIGUOUS: "#888888",
-}
-
 _GLOSSARY = {
-    "rs": {
-        "title": "Relative Strength (RS)",
-        "body": (
-            "Sector return **minus** SPY return over a rolling window. "
-            "Positive RS = outperforming the broad market. Negative = underperforming.\n\n"
-            "**RS 5d / 20d / 60d:** Short, medium, and long lookback windows. "
-            "20d is the primary ranking signal.\n\n"
-            "RS is *relative*, not absolute — a sector can have negative RS in a rising market "
-            "if it's rising less than SPY."
-        ),
-    },
-    "slope": {
-        "title": "RS Slope",
-        "body": (
-            "The 5-session rate of change of 20d RS. Measures whether a sector's relative "
-            "strength is **accelerating** (positive slope) or **decaying** (negative slope).\n\n"
-            "A sector can be top-ranked but decaying (exhaustion signal) or mid-ranked but "
-            "accelerating (broadening signal). Slope is often more actionable than the level."
-        ),
-    },
-    "composite": {
-        "title": "RS Composite Score (0–100)",
-        "body": (
-            "Weighted blend of percentile-ranked RS across all three windows:\n\n"
-            "- **5d RS:** 20% weight (short-term momentum)\n"
-            "- **20d RS:** 50% weight (primary signal)\n"
-            "- **60d RS:** 30% weight (trend confirmation)\n\n"
-            "A score of 100 means the sector is top-ranked at every timeframe. "
-            "50 is mid-pack. 0 is worst at every timeframe."
-        ),
-    },
-    "pump_score": {
-        "title": "Pump Score (0.00–1.00)",
-        "body": (
-            "Composite momentum score blending three pillars:\n\n"
-            "- **RS Pillar (40%):** Relative strength composite\n"
-            "- **Participation Pillar (30%):** Breadth/volume confirmation\n"
-            "- **Flow Pillar (30%):** Money flow proxy\n\n"
-            "**Pump Delta:** Session-over-session change in pump score. "
-            "Positive delta = strengthening. Negative delta = fading.\n\n"
-            "The *delta* often matters more than the *level* — "
-            "a mid-score sector with rising delta (broadening) is more interesting "
-            "than a high-score sector with falling delta (exhaustion)."
-        ),
-    },
-    "state": {
-        "title": "Analysis State",
-        "body": (
-            "Each sector is classified into one of six states:\n\n"
-            "- **Accumulation:** Low-to-mid score, positive delta — early positioning\n"
-            "- **Broadening:** Delta positive 5+ sessions, score above 50th pctl — momentum building\n"
-            "- **Overt Pump:** Top quartile score + top 3 rank + positive delta — clear leadership\n"
-            "- **Exhaustion:** Was top quartile, delta negative 3+ sessions — momentum fading\n"
-            "- **Rotation/Reversal:** Score declining, rank dropping — capital leaving\n"
-            "- **Ambiguous:** Conflicting signals, no clear direction\n\n"
-            "**Confidence (10–95%):** How strongly the signals agree. "
-            "Reduced by 20% in FRAGILE regime, 30% in HOSTILE.\n\n"
-            "**Transition Pressure:** UP / STABLE / DOWN / BREAK. "
-            "BREAK = state just changed this session."
-        ),
-    },
-    "rank": {
-        "title": "RS Rank (1–11)",
-        "body": (
-            "Cross-sectional rank across all 11 GICS sector ETFs, based on 20d RS. "
-            "Rank 1 = strongest relative performer. Rank 11 = weakest.\n\n"
-            "**Rank Change:** How many positions the sector moved since the prior session. "
-            "+2 means it improved by 2 spots. −3 means it dropped 3 spots.\n\n"
-            "Rank changes are key rotation signals — watch for sectors climbing from mid-pack "
-            "into top 3 (broadening) or falling from top 3 (exhaustion)."
-        ),
-    },
+    "rank": {"title": "RS Rank (1–11)", "body": "Cross-sectional rank based on 20d RS. 1 = strongest."},
+    "rs": {"title": "Relative Strength", "body": "Sector return minus SPY return over rolling window. Positive = outperforming."},
+    "performance": {"title": "Absolute Performance", "body": "Raw price return over the window, not relative to any benchmark."},
+    "composite": {"title": "RS Composite (0–100)", "body": "Weighted blend: 20% × 5d + 50% × 20d + 30% × 60d, percentile-ranked across sectors."},
+    "pump_score": {"title": "Pump Score (0–1)", "body": "Weighted blend of RS (40%), participation (30%), flow (30%) pillars. Delta = session-over-session change."},
+    "state": {"title": "Analysis State", "body": "Accumulation → Broadening → Overt Pump → Exhaustion → Rotation. Ambiguous = conflicting signals."},
+    "heatmap": {"title": "RS Heat Map", "body": "Each cell shows RS at a given timeframe. Green = outperforming SPY, red = underperforming. Lets you see multi-timeframe alignment at a glance."},
 }
 
 
-def _render_glossary_popover(key: str):
+def _popover(key: str):
     entry = _GLOSSARY.get(key, {})
     with st.popover("ℹ️"):
         st.markdown(f"**{entry.get('title', key)}**")
-        st.markdown(entry.get("body", "No description available."))
+        st.markdown(entry.get("body", ""))
 
 
 def render_sector_table(result: dict):
@@ -123,22 +43,25 @@ def render_sector_table(result: dict):
     states = result["states"]
     pumps = result["pumps"]
     rs_history = result["rs_history"]
+    prices = result["prices"]
 
-    # Header with glossary popovers
-    st.subheader("Sector Relative Strength Rankings")
-    g1, g2, g3, g4, g5 = st.columns(5)
+    st.subheader("Sector Rankings")
+
+    # ── View toggle ───────────────────────────────────
+    view_col, g1, g2, g3 = st.columns([2, 1, 1, 1])
+    with view_col:
+        view = st.selectbox("View", ["Relative Strength (vs SPY)", "Absolute Performance"], key="sector_view")
     with g1:
-        _render_glossary_popover("rank")
+        _popover("rs" if "Relative" in view else "performance")
     with g2:
-        _render_glossary_popover("rs")
+        _popover("pump_score")
     with g3:
-        _render_glossary_popover("composite")
-    with g4:
-        _render_glossary_popover("pump_score")
-    with g5:
-        _render_glossary_popover("state")
+        _popover("state")
 
-    # Build table data
+    is_rs = "Relative" in view
+
+    # ── Main table ────────────────────────────────────
+    from dashboard.components.style_utils import color_row_by_state
     rows = []
     for r in rs_readings:
         state = states.get(r.ticker)
@@ -154,62 +77,102 @@ def render_sector_table(result: dict):
         elif r.rs_rank_change < 0:
             rank_arrow = f" ({r.rs_rank_change})"
 
-        rows.append({
-            "Rank": f"#{r.rs_rank}{rank_arrow}",
-            "Ticker": r.ticker,
-            "Sector": r.name,
-            "ETF Name": _ETF_FULL_NAMES.get(r.ticker, r.name),
-            "RS 5d": f"{r.rs_5d:+.2%}",
-            "RS 20d": f"{r.rs_20d:+.2%}",
-            "RS 60d": f"{r.rs_60d:+.2%}",
-            "Slope": f"{r.rs_slope:+.4f}",
-            "Composite": f"{r.rs_composite:.1f}",
-            "Pump": f"{pump_score:.2f}",
-            "Delta": f"{pump_delta:+.3f}",
-            "State": state_val,
-            "Conf": f"{state_conf}%",
+        rev_map = result.get("reversal_map", {})
+        rev = rev_map.get(r.ticker)
+        rev_str = f"{rev.reversal_score:.2f}" if rev else "—"
+        rev_pct = f"{rev.reversal_percentile:.0f}%" if rev else "—"
+        if rev and rev.above_75th:
+            rev_pct += " ⚠"
+
+        if is_rs:
+            row = {
+                "Rank": f"#{r.rs_rank}{rank_arrow}",
+                "Ticker": r.ticker, "Sector": r.name,
+                "RS 5d": f"{r.rs_5d:+.2%}", "RS 20d": f"{r.rs_20d:+.2%}", "RS 60d": f"{r.rs_60d:+.2%}",
+                "Slope": f"{r.rs_slope:+.4f}", "Composite": f"{r.rs_composite:.1f}",
+            }
+        else:
+            # Absolute performance
+            p5 = prices[r.ticker].pct_change(5).iloc[-1] if r.ticker in prices.columns else 0
+            p20 = prices[r.ticker].pct_change(20).iloc[-1] if r.ticker in prices.columns else 0
+            p60 = prices[r.ticker].pct_change(60).iloc[-1] if r.ticker in prices.columns and len(prices) > 60 else 0
+            row = {
+                "Rank": f"#{r.rs_rank}{rank_arrow}",
+                "Ticker": r.ticker, "Sector": r.name,
+                "Perf 5d": f"{p5:+.2%}", "Perf 20d": f"{p20:+.2%}", "Perf 60d": f"{p60:+.2%}",
+                "Composite": f"{r.rs_composite:.1f}",
+            }
+        row.update({
+            "Pump": f"{pump_score:.2f}", "Delta": f"{pump_delta:+.3f}",
+            "Rev": rev_str, "Rev %ile": rev_pct,
+            "State": state_val, "Conf": f"{state_conf}%",
         })
+        rows.append(row)
 
     df = pd.DataFrame(rows)
-    st.dataframe(df, width="stretch", hide_index=True)
+    styled = df.style.apply(color_row_by_state, axis=1)
+    st.dataframe(styled, width="stretch", hide_index=True)
 
-    # Sparklines
+    # ── Sparklines ────────────────────────────────────
     st.subheader("20d RS Sparklines (60 trading days)")
     n_cols = 3
-    readings_sorted = sorted(result["rs_readings"], key=lambda r: r.rs_rank)
-    for row_start in range(0, len(readings_sorted), n_cols):
+    for row_start in range(0, len(rs_readings), n_cols):
         cols = st.columns(n_cols)
         for j, col in enumerate(cols):
             idx = row_start + j
-            if idx >= len(readings_sorted):
+            if idx >= len(rs_readings):
                 break
-            r = readings_sorted[idx]
+            r = rs_readings[idx]
             with col:
                 if r.ticker in rs_history.columns:
-                    spark_data = rs_history[r.ticker].tail(60).dropna()
-                    if not spark_data.empty:
-                        color = "#00d4aa" if spark_data.iloc[-1] > 0 else "#ff4444"
-                        fill_rgba = "rgba(0,212,170,0.1)" if spark_data.iloc[-1] > 0 else "rgba(255,68,68,0.1)"
-                        fig = go.Figure(go.Scatter(
-                            x=spark_data.index, y=spark_data.values,
-                            mode="lines", line=dict(color=color, width=2),
-                            fill="tozeroy", fillcolor=fill_rgba,
-                        ))
+                    spark = rs_history[r.ticker].tail(60).dropna()
+                    if not spark.empty:
+                        color = "#00d4aa" if spark.iloc[-1] > 0 else "#ff4444"
+                        fill = "rgba(0,212,170,0.1)" if spark.iloc[-1] > 0 else "rgba(255,68,68,0.1)"
+                        fig = go.Figure(go.Scatter(x=spark.index, y=spark.values, mode="lines",
+                                                   line=dict(color=color, width=2), fill="tozeroy", fillcolor=fill))
                         fig.add_hline(y=0, line_dash="dot", line_color="#555")
-                        fig.update_layout(
-                            height=120, margin=dict(t=25, b=5, l=5, r=5),
-                            title=dict(text=f"#{r.rs_rank} {r.ticker} — {r.name}", font=dict(size=12)),
-                            xaxis=dict(visible=False), yaxis=dict(visible=False),
-                        )
+                        fig.update_layout(height=120, margin=dict(t=25, b=5, l=5, r=5),
+                                          title=dict(text=f"#{r.rs_rank} {r.ticker} — {r.name}", font=dict(size=12)),
+                                          xaxis=dict(visible=False), yaxis=dict(visible=False))
                         st.plotly_chart(fig, width="stretch")
 
-    # Composite bar chart — sorted by composite score descending (most desirable first)
+    # ── RS Composite bar chart ────────────────────────
     st.subheader("RS Composite Score")
-    by_composite = sorted(result["rs_readings"], key=lambda r: r.rs_composite, reverse=True)
-    tickers = [f"{r.ticker} ({r.name})" for r in by_composite]
-    composites = [r.rs_composite for r in by_composite]
-    colors = ["#00d4aa" if c > 60 else "#ffa500" if c > 40 else "#ff4444" for c in composites]
-    fig = go.Figure(go.Bar(x=tickers, y=composites, marker_color=colors))
+    by_comp = sorted(result["rs_readings"], key=lambda r: r.rs_composite, reverse=True)
+    labels = [f"{r.ticker} ({r.name})" for r in by_comp]
+    vals = [r.rs_composite for r in by_comp]
+    colors = ["#00d4aa" if c > 60 else "#ffa500" if c > 40 else "#ff4444" for c in vals]
+    fig = go.Figure(go.Bar(x=labels, y=vals, marker_color=colors))
     fig.update_layout(height=300, margin=dict(t=20, b=20), yaxis_title="Composite (0-100)",
-                      xaxis=dict(categoryorder="array", categoryarray=tickers))
+                      xaxis=dict(categoryorder="array", categoryarray=labels))
     st.plotly_chart(fig, width="stretch")
+
+    # ── Heat Map ──────────────────────────────────────
+    hdr, info = st.columns([6, 1])
+    with hdr:
+        st.subheader("RS Heat Map")
+    with info:
+        _popover("heatmap")
+
+    hm_data = []
+    for r in sorted(result["rs_readings"], key=lambda x: x.rs_rank):
+        hm_data.append({"Sector": f"{r.ticker} ({r.name})", "5d": r.rs_5d * 100, "20d": r.rs_20d * 100, "60d": r.rs_60d * 100})
+    hm_df = pd.DataFrame(hm_data).set_index("Sector")
+    fig = px.imshow(hm_df.values, x=hm_df.columns.tolist(), y=hm_df.index.tolist(),
+                    color_continuous_scale=["#ff4444", "#333333", "#00d4aa"],
+                    color_continuous_midpoint=0, aspect="auto",
+                    labels=dict(color="RS (%)"))
+    fig.update_layout(height=max(300, len(hm_df) * 35), margin=dict(t=20, b=20))
+    st.plotly_chart(fig, width="stretch")
+
+    # ── Valuations ────────────────────────────────────
+    with st.expander("Sector Valuations (from yfinance — updated daily)"):
+        from dashboard.components.valuations import fetch_valuations
+        sector_tickers = [r.ticker for r in rs_readings]
+        val_df = fetch_valuations(sector_tickers)
+        if not val_df.empty:
+            display_cols = [c for c in ["Ticker", "P/E", "Fwd P/E", "P/B", "Div Yield", "AUM ($B)", "% from 52w High", "Expense Ratio"] if c in val_df.columns]
+            st.dataframe(val_df[display_cols], width="stretch", hide_index=True)
+        else:
+            st.info("Valuation data unavailable.")

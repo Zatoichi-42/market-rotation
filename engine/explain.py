@@ -15,6 +15,7 @@ from engine.schemas import (
     RegimeState, SignalLevel, RegimeAssessment,
     AnalysisState, TransitionPressure, StateClassification,
     BreadthSignal, BreadthReading, PumpScoreReading,
+    ReversalScoreReading, TurnoverCheck, IndustryRSReading,
 )
 
 
@@ -177,3 +178,92 @@ def explain_breadth(reading: BreadthReading) -> str:
             f"20d change: {change:+.4f}, z-score: {z_str} {src}. "
             f"Significant breadth divergence — narrow leadership, caution warranted."
         )
+
+
+# ═══════════════════════════════════════════════════════
+# PHASE 2: REVERSAL, TURNOVER, INDUSTRY
+# ═══════════════════════════════════════════════════════
+
+def explain_reversal(reading: ReversalScoreReading, regime: RegimeState) -> str:
+    """Human-readable explanation for reversal score."""
+    score = reading.reversal_score
+    pct = reading.reversal_percentile
+    bd = reading.breadth_det_pillar
+    pb = reading.price_break_pillar
+    cr = reading.crowding_pillar
+
+    if reading.above_75th:
+        level = "ELEVATED fragility"
+    elif pct > 50:
+        level = "moderate fragility"
+    else:
+        level = "low fragility"
+
+    parts = [
+        f"{reading.ticker} Reversal Score: {score:.2f} "
+        f"({pct:.0f}th percentile — {level})."
+    ]
+    parts.append(
+        f"Breadth Det: {bd:.0f}/100, "
+        f"Price Break: {pb:.0f}/100, "
+        f"Crowding: {cr:.0f}/100."
+    )
+
+    if regime == RegimeState.HOSTILE:
+        parts.append("Regime is HOSTILE — reversal risk compounded by macro stress.")
+    elif regime == RegimeState.FRAGILE:
+        parts.append("Regime is FRAGILE — elevated reversal scores warrant extra caution.")
+
+    return " ".join(parts)
+
+
+def explain_turnover(check: TurnoverCheck) -> str:
+    """Human-readable explanation for turnover filter decision."""
+    if check.current_state_exempt:
+        return (
+            f"Turnover filter: PASS (exempt). {check.current_ticker} is in an exempt state. "
+            f"Candidate {check.candidate_ticker} accepted with delta advantage "
+            f"{check.delta_advantage:+.3f}."
+        )
+    elif check.passes_filter:
+        return (
+            f"Turnover filter: PASS. {check.candidate_ticker} Pump delta exceeds "
+            f"{check.current_ticker} by {check.delta_advantage:+.3f} for "
+            f"{check.persistence_sessions} consecutive sessions. Rotation justified."
+        )
+    else:
+        return (
+            f"Turnover filter: FAIL. {check.candidate_ticker} delta advantage "
+            f"{check.delta_advantage:+.3f} over {check.current_ticker} — "
+            f"marginal improvement, do not rotate."
+        )
+
+
+def explain_industry_rs(reading: IndustryRSReading) -> str:
+    """Human-readable explanation for industry RS."""
+    ticker = reading.ticker
+    name = reading.name
+    parent = reading.parent_sector
+    rs20 = reading.rs_20d
+    rs20p = reading.rs_20d_vs_parent
+    rank = reading.rs_rank
+    rank_chg = reading.rs_rank_change
+
+    rank_dir = ""
+    if rank_chg > 0:
+        rank_dir = f", up from #{rank + rank_chg}"
+    elif rank_chg < 0:
+        rank_dir = f", down from #{rank + rank_chg}"
+
+    if rs20p > 0.001:
+        vs_parent_desc = f"outperforming own sector by {rs20p:+.1%} — driving the sector"
+    elif rs20p < -0.001:
+        vs_parent_desc = f"lagging own sector by {rs20p:+.1%} — underperforming within sector"
+    else:
+        vs_parent_desc = "tracking sector closely — neutral vs parent"
+
+    return (
+        f"{ticker} ({name}, parent: {parent}): "
+        f"vs SPY: 20d RS = {rs20:+.1%} (rank #{rank} of industries{rank_dir}). "
+        f"vs {parent}: 20d RS = {rs20p:+.1%} — {vs_parent_desc}."
+    )

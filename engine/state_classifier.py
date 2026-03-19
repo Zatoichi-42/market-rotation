@@ -16,7 +16,7 @@ Confidence is adjusted by:
 """
 from engine.schemas import (
     AnalysisState, TransitionPressure, RegimeState,
-    StateClassification, PumpScoreReading,
+    StateClassification, PumpScoreReading, ReversalScoreReading,
 )
 from engine.explain import explain_state
 
@@ -33,6 +33,7 @@ def classify_state(
     pump_percentile: float,
     delta_history: list[float],
     settings: dict,
+    reversal_score: ReversalScoreReading | None = None,
 ) -> StateClassification:
     """
     Classify a single sector's analysis state.
@@ -45,12 +46,14 @@ def classify_state(
         pump_percentile: Pump score percentile (0-100) across all sectors
         delta_history: Recent pump delta values (newest last)
         settings: State classifier settings from config
+        reversal_score: Optional ReversalScoreReading (Phase 2). When None, Phase 1 behavior.
     """
     ticker = pump.ticker
     name = pump.name
 
     # Determine new state
-    state = _determine_state(pump, prior, rs_rank, pump_percentile, delta_history, settings)
+    state = _determine_state(pump, prior, rs_rank, pump_percentile, delta_history, settings,
+                             reversal_score=reversal_score)
 
     # Track sessions in state
     if prior and state == prior.state:
@@ -64,7 +67,8 @@ def classify_state(
     pressure = _compute_pressure(delta_history, state_changed)
 
     # Compute confidence
-    confidence = _compute_confidence(pump, regime, rs_rank, pump_percentile, delta_history, state)
+    confidence = _compute_confidence(pump, regime, rs_rank, pump_percentile, delta_history, state,
+                                     reversal_score=reversal_score)
 
     # Prior state reference
     prior_state = prior.state if prior else None
@@ -90,6 +94,7 @@ def classify_all_sectors(
     pump_percentiles: dict[str, float],
     delta_histories: dict[str, list[float]],
     settings: dict,
+    reversal_scores: dict[str, ReversalScoreReading] | None = None,
 ) -> dict[str, StateClassification]:
     """Classify all sectors. Returns dict[ticker, StateClassification]."""
     results = {}
@@ -98,11 +103,13 @@ def classify_all_sectors(
         rank = rs_ranks.get(ticker, 6)
         pctl = pump_percentiles.get(ticker, 50.0)
         hist = delta_histories.get(ticker, [])
+        rev = reversal_scores.get(ticker) if reversal_scores else None
 
         results[ticker] = classify_state(
             pump=pump, prior=prior, regime=regime,
             rs_rank=rank, pump_percentile=pctl,
             delta_history=hist, settings=settings,
+            reversal_score=rev,
         )
     return results
 
@@ -118,6 +125,7 @@ def _determine_state(
     pump_percentile: float,
     delta_history: list[float],
     settings: dict,
+    reversal_score: ReversalScoreReading | None = None,
 ) -> AnalysisState:
     """Core state determination logic."""
     score = pump.pump_score
@@ -173,6 +181,12 @@ def _determine_state(
             and consec_nonpositive >= min_exhaust_nonpos):
         return AnalysisState.EXHAUSTION
 
+    # ── Rotation via Reversal Score (Phase 2): Exhaustion + high reversal ──
+    if (prior_state == AnalysisState.EXHAUSTION
+            and reversal_score is not None
+            and reversal_score.above_75th):
+        return AnalysisState.ROTATION
+
     # ── Rotation: was exhausting + continued decline + rank dropping ──
     if (prior_state in (AnalysisState.EXHAUSTION, AnalysisState.ROTATION)
             and delta < -_DELTA_NEAR_ZERO and rs_rank >= 7):
@@ -225,6 +239,7 @@ def _compute_confidence(
     pump_percentile: float,
     delta_history: list[float],
     state: AnalysisState,
+    reversal_score: ReversalScoreReading | None = None,
 ) -> int:
     """Compute confidence score (10-95)."""
     confidence = 60  # Base
@@ -254,6 +269,19 @@ def _compute_confidence(
     # Ambiguous state = low confidence
     if state == AnalysisState.AMBIGUOUS:
         confidence -= 15
+
+    # Reversal score integration (Phase 2)
+    if reversal_score is not None:
+        pump_delta = pump.pump_delta
+        if reversal_score.above_75th and pump_delta < -_DELTA_NEAR_ZERO:
+            # Converging evidence of exhaustion → boost confidence
+            confidence += 10
+        elif reversal_score.above_75th and pump_delta > _DELTA_NEAR_ZERO:
+            # Conflicting: pump rising but reversal elevated → reduce confidence
+            confidence -= 15
+        elif not reversal_score.above_75th and pump_delta > _DELTA_NEAR_ZERO:
+            # Confirming: pump rising, low reversal risk → boost
+            confidence += 5
 
     # Regime overlay
     if regime == RegimeState.HOSTILE:

@@ -79,7 +79,10 @@ def render_replay_panel(result: dict):
             "State": state.state.value if state else "N/A",
             "Confidence": f"{state.confidence}%" if state else "N/A",
         })
-    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+    from dashboard.components.style_utils import color_row_by_state
+    df = pd.DataFrame(rows)
+    styled = df.style.apply(color_row_by_state, axis=1)
+    st.dataframe(styled, width="stretch", hide_index=True)
 
     # Forward returns
     prices = result["prices"]

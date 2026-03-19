@@ -645,3 +645,191 @@ def make_volume_data(n_days: int, tickers: list[str],
         data[ticker] = np.maximum(vols, 1000).astype(int)  # No negative volumes
 
     return pd.DataFrame(data, index=dates)
+
+
+# ═══════════════════════════════════════════════════════
+# PHASE 2: INDUSTRY + REVERSAL FACTORIES
+# ═══════════════════════════════════════════════════════
+
+INDUSTRY_TICKERS = [
+    "SMH", "IGV", "HACK", "SOXX", "XBI", "IHI", "KRE", "IAI", "KIE",
+    "XOP", "OIH", "URA", "ITA", "XAR", "XHB", "ITB", "XRT", "IBUY",
+    "XME", "GDX", "VNQ", "TAN", "NLR",
+]
+
+INDUSTRY_PARENT_MAP = {
+    "SMH": "XLK", "IGV": "XLK", "HACK": "XLK", "SOXX": "XLK",
+    "XBI": "XLV", "IHI": "XLV",
+    "KRE": "XLF", "IAI": "XLF", "KIE": "XLF",
+    "XOP": "XLE", "OIH": "XLE", "URA": "XLE",
+    "ITA": "XLI", "XAR": "XLI",
+    "XHB": "XLY", "ITB": "XLY", "XRT": "XLY", "IBUY": "XLY",
+    "XME": "XLB", "GDX": "XLB",
+    "VNQ": "XLRE",
+    "TAN": "XLU",
+    "NLR": "XLU",
+    "SOXX": "XLK",
+    "URA": "XLE",
+}
+
+ALL_TICKERS_V2 = ALL_TICKERS + INDUSTRY_TICKERS
+
+
+def _add_industry_prices(base: dict, n_days: int, industry_returns: dict,
+                         seed: int = 200) -> dict:
+    """Add industry price columns to an existing scenario dict."""
+    np.random.seed(seed)
+    dates = base["prices"].index
+    for ticker in INDUSTRY_TICKERS:
+        if ticker in industry_returns:
+            rets = industry_returns[ticker]
+        else:
+            # Default: track parent sector + small noise
+            parent = INDUSTRY_PARENT_MAP[ticker]
+            if parent in base["prices"].columns:
+                parent_rets = base["prices"][parent].pct_change().fillna(0).values
+                rets = list(parent_rets + np.random.normal(0, 0.001, len(parent_rets)))
+            else:
+                rets = list(np.random.normal(0.0003, 0.002, n_days))
+        # Build price column
+        prices_list = [100.0]
+        for r in rets[:n_days]:
+            prices_list.append(prices_list[-1] * (1 + r))
+        base["prices"][ticker] = prices_list[1:n_days+1]
+
+    # Add highs/lows for reversal score computation
+    base["highs"] = base["prices"] * (1 + np.abs(np.random.normal(0, 0.005, base["prices"].shape)))
+    base["lows"] = base["prices"] * (1 - np.abs(np.random.normal(0, 0.005, base["prices"].shape)))
+    # Ensure high >= close >= low
+    base["highs"] = base["highs"].clip(lower=base["prices"])
+    base["lows"] = base["lows"].clip(upper=base["prices"])
+
+    # Extend volumes for industry tickers
+    for ticker in INDUSTRY_TICKERS:
+        if ticker not in base["volumes"].columns:
+            base["volumes"][ticker] = np.random.randint(1_000_000, 20_000_000, n_days)
+
+    return base
+
+
+def make_industry_normal_market(n_days: int = 120) -> dict:
+    """
+    Normal market WITH industry ETFs.
+    - SMH strongly outperforming XLK (driving the sector)
+    - XBI lagging XLV (not driving its sector)
+    - XOP roughly tracking XLE (neutral vs parent)
+    """
+    base = make_normal_market(n_days)
+    industry_returns = {
+        "SMH": list(0.0015 + np.random.normal(0, 0.002, n_days)),  # Strong vs XLK (+0.15%/day)
+        "XBI": list(-0.0005 + np.random.normal(0, 0.002, n_days)),  # Lagging XLV (-0.05%/day)
+    }
+    return _add_industry_prices(base, n_days, industry_returns, seed=201)
+
+
+def make_industry_rotation(n_days: int = 60) -> dict:
+    """
+    INDUSTRY-LEVEL BATON PASS:
+    - SMH was leading (first 30 days), now decaying
+    - XBI was lagging (first 30 days), now accelerating
+    - Industry signal leads sector signal
+    """
+    base = make_sector_rotation(n_days)
+    half = n_days // 2
+    industry_returns = {
+        "SMH": list(0.002 + np.random.normal(0, 0.002, half)) +
+               list(-0.001 + np.random.normal(0, 0.002, n_days - half)),
+        "XBI": list(-0.001 + np.random.normal(0, 0.002, half)) +
+               list(0.002 + np.random.normal(0, 0.002, n_days - half)),
+    }
+    return _add_industry_prices(base, n_days, industry_returns, seed=202)
+
+
+def make_reversal_exhaustion(n_days: int = 60) -> dict:
+    """
+    EXHAUSTION REVERSAL scenario:
+    - XLE strong run (days 1-40): +0.25%/day, rising volume
+    - Days 41-60: price near highs but RS slope negative, CLV declining,
+      failed breakout, volume spiking (climax)
+    """
+    np.random.seed(203)
+    daily_returns = {}
+    for ticker in SECTOR_TICKERS:
+        if ticker == "XLE":
+            phase1 = list(0.0025 + np.random.normal(0, 0.002, 40))
+            phase2 = list(-0.0005 + np.random.normal(0, 0.003, n_days - 40))
+            daily_returns[ticker] = phase1 + phase2
+        else:
+            daily_returns[ticker] = list(0.0003 + np.random.normal(0, 0.002, n_days))
+
+    daily_returns["SPY"] = list(0.0005 + np.random.normal(0, 0.002, n_days))
+    daily_returns["RSP"] = list(0.0005 + np.random.normal(0, 0.002, n_days))
+    daily_returns["HYG"] = list(0.0002 + np.random.normal(0, 0.001, n_days))
+    daily_returns["LQD"] = list(0.0001 + np.random.normal(0, 0.001, n_days))
+    daily_returns["QQQ"] = list(0.0005 + np.random.normal(0, 0.003, n_days))
+    daily_returns["IWM"] = list(0.0004 + np.random.normal(0, 0.003, n_days))
+    daily_returns["DIA"] = list(0.0004 + np.random.normal(0, 0.002, n_days))
+
+    prices = _make_prices_from_returns(ALL_TICKERS, daily_returns, n_days=n_days)
+    vix, vix3m = _constant_vix(n_days, 16.0, 18.0)
+    volumes = make_volume_data(n_days, ALL_TICKERS, pattern="climax")
+
+    result = {"prices": prices, "vix": vix, "vix3m": vix3m, "volumes": volumes}
+    return _add_industry_prices(result, n_days, {}, seed=204)
+
+
+def make_reversal_crowding(n_days: int = 60) -> dict:
+    """
+    CROWDING / STRETCH scenario:
+    - XLK parabolic last 20 days (+0.5%/day accelerating)
+    - Price acceleration extreme, distance from MA > 3σ, volume 2x+
+    """
+    np.random.seed(205)
+    daily_returns = {}
+    for ticker in SECTOR_TICKERS:
+        if ticker == "XLK":
+            normal = list(0.001 + np.random.normal(0, 0.002, n_days - 20))
+            parabolic = list(np.linspace(0.003, 0.008, 20) + np.random.normal(0, 0.001, 20))
+            daily_returns[ticker] = normal + parabolic
+        else:
+            daily_returns[ticker] = list(0.0003 + np.random.normal(0, 0.002, n_days))
+
+    daily_returns["SPY"] = list(0.0005 + np.random.normal(0, 0.002, n_days))
+    daily_returns["RSP"] = list(0.0005 + np.random.normal(0, 0.002, n_days))
+    daily_returns["HYG"] = list(0.0002 + np.random.normal(0, 0.001, n_days))
+    daily_returns["LQD"] = list(0.0001 + np.random.normal(0, 0.001, n_days))
+    daily_returns["QQQ"] = list(0.0006 + np.random.normal(0, 0.003, n_days))
+    daily_returns["IWM"] = list(0.0004 + np.random.normal(0, 0.003, n_days))
+    daily_returns["DIA"] = list(0.0004 + np.random.normal(0, 0.002, n_days))
+
+    prices = _make_prices_from_returns(ALL_TICKERS, daily_returns, n_days=n_days)
+    vix, vix3m = _constant_vix(n_days, 15.0, 17.0)
+    volumes = make_volume_data(n_days, ALL_TICKERS, pattern="surge")
+
+    result = {"prices": prices, "vix": vix, "vix3m": vix3m, "volumes": volumes}
+    return _add_industry_prices(result, n_days, {}, seed=206)
+
+
+def make_turnover_marginal(n_days: int = 30) -> dict:
+    """Current holding Pump Δ = +0.02, candidate Δ = +0.05. Gap = 0.03 < 0.08 threshold."""
+    return {
+        "current_deltas": [0.02] * n_days,
+        "candidate_deltas": [0.05] * n_days,
+    }
+
+
+def make_turnover_clear(n_days: int = 30) -> dict:
+    """Current holding Pump Δ = -0.01, candidate Δ = +0.10. Gap = 0.11 > 0.08."""
+    return {
+        "current_deltas": [-0.01] * n_days,
+        "candidate_deltas": [0.10] * n_days,
+    }
+
+
+def make_turnover_exempt(n_days: int = 30) -> dict:
+    """Current in Exhaustion, advantage only 0.04 — exempt from threshold."""
+    return {
+        "current_deltas": [0.01] * n_days,
+        "candidate_deltas": [0.05] * n_days,
+        "current_state": "Exhaustion",
+    }
