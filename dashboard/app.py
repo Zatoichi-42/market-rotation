@@ -1,0 +1,205 @@
+"""
+Streamlit dashboard — main entry point.
+5 panels: Regime, Sector Table, Breadth, Replay, Debug.
+"""
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import streamlit as st
+import yaml
+import numpy as np
+import pandas as pd
+from datetime import datetime, timezone
+
+from data.fetcher import fetch_all
+from data.snapshots import list_snapshots, load_snapshot
+from engine.regime_gate import classify_regime_from_data
+from engine.rs_scanner import compute_rs_readings, compute_rs_all
+from engine.breadth import compute_breadth
+from engine.normalizer import compute_zscore, percentile_rank
+from engine.pump_score import compute_pump_score
+from engine.state_classifier import classify_all_sectors
+from engine.schemas import (
+    DailySnapshot, PumpScoreReading, RegimeState,
+)
+
+st.set_page_config(page_title="Pump Rotation System", layout="wide", page_icon="📊")
+
+SECTOR_NAMES = {
+    "XLK": "Technology", "XLV": "Health Care", "XLF": "Financials",
+    "XLE": "Energy", "XLI": "Industrials", "XLU": "Utilities",
+    "XLRE": "Real Estate", "XLC": "Communication Services",
+    "XLY": "Consumer Discretionary", "XLP": "Consumer Staples", "XLB": "Materials",
+}
+
+
+@st.cache_data(ttl=3600)
+def load_config():
+    with open("config/settings.yaml") as f:
+        settings = yaml.safe_load(f)
+    with open("config/universe.yaml") as f:
+        universe = yaml.safe_load(f)
+    return settings, universe
+
+
+@st.cache_data(ttl=1800)
+def run_pipeline():
+    """Run the full pipeline and return current snapshot + raw data."""
+    settings, universe = load_config()
+    config = {**settings, **universe}
+    data = fetch_all(config)
+    prices = data["prices"]
+
+    # Regime
+    vix_val = data["vix"].iloc[-1] if len(data["vix"]) > 0 else 20.0
+    vix3m_val = data["vix3m"].iloc[-1] if len(data["vix3m"]) > 0 else 20.0
+    breadth_reading = compute_breadth(prices)
+    bz = breadth_reading.rsp_spy_ratio_zscore
+    if np.isnan(bz):
+        bz = 0.0
+    credit = data["credit"]
+    if "hyg_close" in credit.columns and "lqd_close" in credit.columns:
+        cr = credit["hyg_close"] / credit["lqd_close"]
+        cr_clean = cr.dropna()
+        credit_z = compute_zscore(cr_clean.iloc[-1], cr_clean) if len(cr_clean) > 2 else 0.0
+    else:
+        credit_z = 0.0
+
+    # Extract latest FRED HY OAS if available (FRED reports %, convert to bps)
+    fred_hy_oas = data.get("fred_hy_oas")
+    fred_oas_bps = None
+    if fred_hy_oas is not None and not fred_hy_oas.empty:
+        fred_oas_bps = fred_hy_oas["hy_oas"].dropna().iloc[-1] * 100  # % → bps
+
+    regime = classify_regime_from_data(vix_val, vix3m_val, bz, credit_z, settings["regime"],
+                                       fred_hy_oas_value=fred_oas_bps)
+
+    # RS
+    rs_cfg = settings["rs"]
+    rs_readings = compute_rs_readings(
+        prices, SECTOR_NAMES,
+        windows=rs_cfg["windows"],
+        slope_window=rs_cfg["slope_window"],
+        composite_weights=rs_cfg["composite_weights"],
+    )
+
+    # RS history for sparklines + pump score history
+    rs_20d_history = compute_rs_all(prices, list(SECTOR_NAMES.keys()), window=20)
+
+    # Compute pump scores across recent history to get real deltas
+    pump_weights = settings["pump_score"]
+    lookback = 20  # sessions of pump history for deltas
+    score_history = {t: [] for t in SECTOR_NAMES}
+    sector_tickers = list(SECTOR_NAMES.keys())
+
+    for i in range(max(0, len(prices) - lookback), len(prices)):
+        day_prices = prices.iloc[:i+1]
+        if len(day_prices) < 20:
+            continue
+        day_rs = compute_rs_readings(
+            day_prices, SECTOR_NAMES,
+            windows=rs_cfg["windows"],
+            slope_window=rs_cfg["slope_window"],
+            composite_weights=rs_cfg["composite_weights"],
+        )
+        for r in day_rs:
+            sc = compute_pump_score(r.rs_composite, 50.0, 50.0, pump_weights)
+            score_history[r.ticker].append(sc)
+
+    # Build current pump scores with real deltas
+    pumps = {}
+    delta_histories = {}
+    for r in rs_readings:
+        hist = score_history[r.ticker]
+        current_score = hist[-1] if hist else compute_pump_score(r.rs_composite, 50.0, 50.0, pump_weights)
+
+        # Compute delta sequence
+        deltas = []
+        for j in range(1, len(hist)):
+            deltas.append(hist[j] - hist[j-1])
+        delta_histories[r.ticker] = deltas
+
+        delta = deltas[-1] if deltas else 0.0
+        d5_window = deltas[-5:] if deltas else [0.0]
+        delta_5d = sum(d5_window) / len(d5_window)
+
+        pumps[r.ticker] = PumpScoreReading(
+            ticker=r.ticker, name=r.name,
+            rs_pillar=r.rs_composite, participation_pillar=50.0, flow_pillar=50.0,
+            pump_score=current_score, pump_delta=delta, pump_delta_5d_avg=delta_5d,
+        )
+
+    # Load prior states from most recent snapshot if available
+    from data.snapshots import list_snapshots, load_snapshot
+    prior_states = {}
+    available_snaps = list_snapshots()
+    if available_snaps:
+        try:
+            last_snap = load_snapshot(available_snaps[-1])
+            prior_states = {s.ticker: s for s in last_snap.states}
+        except Exception:
+            pass
+
+    # State Classifier
+    rs_ranks = {r.ticker: r.rs_rank for r in rs_readings}
+    pump_pcts = percentile_rank(pd.Series({t: p.pump_score for t, p in pumps.items()}))
+    states = classify_all_sectors(
+        pumps=pumps, priors=prior_states, regime=regime.state,
+        rs_ranks=rs_ranks, pump_percentiles=pump_pcts.to_dict(),
+        delta_histories=delta_histories,
+        settings=settings["state"],
+    )
+
+    return {
+        "regime": regime,
+        "rs_readings": rs_readings,
+        "breadth": breadth_reading,
+        "pumps": pumps,
+        "states": states,
+        "prices": prices,
+        "vix": data["vix"],
+        "vix3m": data["vix3m"],
+        "rs_history": rs_20d_history,
+        "vix_val": vix_val,
+        "vix3m_val": vix3m_val,
+        "credit_z": credit_z,
+        "credit": credit,
+        "fred_hy_oas": data.get("fred_hy_oas"),
+    }
+
+
+def main():
+    st.title("Pump Rotation System")
+    st.caption(f"Last updated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
+
+    result = run_pipeline()
+
+    # Tab layout
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "Regime Gate", "Sector Rankings", "Breadth", "Replay", "Debug"
+    ])
+
+    with tab1:
+        from dashboard.components.regime_panel import render_regime_panel
+        render_regime_panel(result)
+
+    with tab2:
+        from dashboard.components.sector_table import render_sector_table
+        render_sector_table(result)
+
+    with tab3:
+        from dashboard.components.breadth_chart import render_breadth_chart
+        render_breadth_chart(result)
+
+    with tab4:
+        from dashboard.components.replay_panel import render_replay_panel
+        render_replay_panel(result)
+
+    with tab5:
+        from dashboard.components.debug_panel import render_debug_panel
+        render_debug_panel(result)
+
+
+if __name__ == "__main__":
+    main()
