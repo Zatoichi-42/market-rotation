@@ -244,13 +244,27 @@ def _dict_to_pump(d: dict) -> PumpScoreReading:
     return PumpScoreReading(**d)
 
 
+# Backward compat: map old state names from Phase 1/2 snapshots to new 5-state model
+_STATE_MIGRATION = {
+    "Broadening": "Accumulation",
+    "Exhaustion": "Distribution",
+    "Rotation/Reversal": "Overt Dump",
+}
+
+
+def _migrate_state(val: str) -> str:
+    return _STATE_MIGRATION.get(val, val)
+
+
 def _dict_to_state(d: dict) -> StateClassification:
+    state_str = _migrate_state(d["state"])
+    prior_str = _migrate_state(d["prior_state"]) if d.get("prior_state") else None
     return StateClassification(
         ticker=d["ticker"], name=d["name"],
-        state=AnalysisState(d["state"]), confidence=d["confidence"],
+        state=AnalysisState(state_str), confidence=d["confidence"],
         sessions_in_state=d["sessions_in_state"],
         transition_pressure=TransitionPressure(d["transition_pressure"]),
-        prior_state=AnalysisState(d["prior_state"]) if d["prior_state"] else None,
+        prior_state=AnalysisState(prior_str) if prior_str else None,
         state_changed=d["state_changed"],
         explanation=d["explanation"],
     )
@@ -295,7 +309,7 @@ def _dict_to_pump_map_row(d: dict) -> PumpMapRow:
         pump_delta_5d_avg=d["pump_delta_5d_avg"],
         reversal_score=d["reversal_score"],
         reversal_percentile=d["reversal_percentile"],
-        analysis_state=AnalysisState(d["analysis_state"]),
+        analysis_state=AnalysisState(_migrate_state(d["analysis_state"])),
         transition_pressure=TransitionPressure(d["transition_pressure"]),
         confidence=d["confidence"],
         rs_composite=d["rs_composite"], rs_rank=d["rs_rank"],

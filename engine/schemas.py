@@ -23,12 +23,11 @@ class SignalLevel(Enum):
 
 
 class AnalysisState(Enum):
-    ACCUMULATION = "Accumulation"
-    BROADENING = "Broadening"
-    OVERT_PUMP = "Overt Pump"
-    EXHAUSTION = "Exhaustion"
-    ROTATION = "Rotation/Reversal"
-    AMBIGUOUS = "Ambiguous"
+    OVERT_DUMP = "Overt Dump"        # Deep red — active rotation out
+    DISTRIBUTION = "Distribution"     # Light red — momentum fading
+    AMBIGUOUS = "Ambiguous"           # No color — conflicting signals
+    ACCUMULATION = "Accumulation"     # Light green — momentum building
+    OVERT_PUMP = "Overt Pump"        # Deep green — strongest inflow
 
 
 class TransitionPressure(Enum):

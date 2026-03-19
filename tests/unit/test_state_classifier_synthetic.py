@@ -65,12 +65,12 @@ class TestStateAssignment:
             delta_history=[0.02, 0.03, 0.02, 0.03, 0.02, 0.03],
             settings=SETTINGS,
         )
-        assert result.state == AnalysisState.BROADENING
+        assert result.state == AnalysisState.ACCUMULATION
 
     def test_overt_pump(self):
         """Top quartile pump score + top 3 rank + delta positive → Overt Pump."""
         pump = _pump(score=0.85, delta=0.02, delta_5d=0.018)
-        prior = _prior(state=AnalysisState.BROADENING, sessions=8)
+        prior = _prior(state=AnalysisState.ACCUMULATION, sessions=8)
         result = classify_state(
             pump=pump, prior=prior, regime=RegimeState.NORMAL,
             rs_rank=1, pump_percentile=88.0,
@@ -89,19 +89,19 @@ class TestStateAssignment:
             delta_history=[0.01, -0.01, -0.02, -0.03],
             settings=SETTINGS,
         )
-        assert result.state == AnalysisState.EXHAUSTION
+        assert result.state == AnalysisState.DISTRIBUTION
 
     def test_rotation(self):
         """Score declining + rank dropping → Rotation."""
         pump = _pump(score=0.45, delta=-0.06, delta_5d=-0.04)
-        prior = _prior(state=AnalysisState.EXHAUSTION, sessions=4)
+        prior = _prior(state=AnalysisState.DISTRIBUTION, sessions=4)
         result = classify_state(
             pump=pump, prior=prior, regime=RegimeState.NORMAL,
             rs_rank=8, pump_percentile=40.0,
             delta_history=[-0.04, -0.05, -0.06, -0.06],
             settings=SETTINGS,
         )
-        assert result.state == AnalysisState.ROTATION
+        assert result.state == AnalysisState.OVERT_DUMP
 
     def test_ambiguous(self):
         """Flip-flopping delta + mid-pack rank → Ambiguous."""
@@ -135,9 +135,10 @@ class TestTransitionPressure:
         assert result.transition_pressure == TransitionPressure.UP
 
     def test_stable_pressure(self):
-        """Delta near zero → STABLE."""
+        """Delta near zero, state unchanged → STABLE."""
         pump = _pump(score=0.50, delta=0.001, delta_5d=0.0)
-        prior = _prior(state=AnalysisState.ACCUMULATION, sessions=5)
+        # Prior is AMBIGUOUS — mixed deltas will keep it AMBIGUOUS → no state change
+        prior = _prior(state=AnalysisState.AMBIGUOUS, sessions=5)
         result = classify_state(
             pump=pump, prior=prior, regime=RegimeState.NORMAL,
             rs_rank=6, pump_percentile=50.0,
@@ -150,7 +151,7 @@ class TestTransitionPressure:
         """Delta < 0 for 3+ sessions, state unchanged → DOWN."""
         pump = _pump(score=0.50, delta=-0.03, delta_5d=-0.02)
         # Prior already EXHAUSTION so state stays the same → no BREAK
-        prior = _prior(state=AnalysisState.EXHAUSTION, sessions=4)
+        prior = _prior(state=AnalysisState.DISTRIBUTION, sessions=4)
         result = classify_state(
             pump=pump, prior=prior, regime=RegimeState.NORMAL,
             rs_rank=3, pump_percentile=50.0,
@@ -162,7 +163,7 @@ class TestTransitionPressure:
     def test_break_on_state_change(self):
         """State changed this session → BREAK."""
         pump = _pump(score=0.85, delta=0.04, delta_5d=0.03)
-        prior = _prior(state=AnalysisState.BROADENING, sessions=5)
+        prior = _prior(state=AnalysisState.ACCUMULATION, sessions=5)
         result = classify_state(
             pump=pump, prior=prior, regime=RegimeState.NORMAL,
             rs_rank=1, pump_percentile=88.0,
@@ -183,7 +184,7 @@ class TestConfidence:
     def test_high_confidence_all_confirming(self):
         """All signals aligned → confidence > 70."""
         pump = _pump(score=0.85, delta=0.03, delta_5d=0.025)
-        prior = _prior(state=AnalysisState.BROADENING, sessions=6)
+        prior = _prior(state=AnalysisState.ACCUMULATION, sessions=6)
         result = classify_state(
             pump=pump, prior=prior, regime=RegimeState.NORMAL,
             rs_rank=1, pump_percentile=88.0,
@@ -195,7 +196,7 @@ class TestConfidence:
     def test_low_confidence_fragile_regime(self):
         """Same signals + FRAGILE regime → confidence reduced."""
         pump = _pump(score=0.85, delta=0.03, delta_5d=0.025)
-        prior = _prior(state=AnalysisState.BROADENING, sessions=6)
+        prior = _prior(state=AnalysisState.ACCUMULATION, sessions=6)
 
         normal_result = classify_state(
             pump=pump, prior=prior, regime=RegimeState.NORMAL,
@@ -214,7 +215,7 @@ class TestConfidence:
     def test_very_low_confidence_hostile(self):
         """HOSTILE regime → confidence reduced further."""
         pump = _pump(score=0.85, delta=0.03, delta_5d=0.025)
-        prior = _prior(state=AnalysisState.BROADENING, sessions=6)
+        prior = _prior(state=AnalysisState.ACCUMULATION, sessions=6)
 
         fragile_result = classify_state(
             pump=pump, prior=prior, regime=RegimeState.FRAGILE,

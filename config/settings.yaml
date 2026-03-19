@@ -79,7 +79,8 @@ turnover:
   min_delta_advantage: 0.08
   min_persistence_sessions: 3
   exempt_states:
-    - "Exhaustion"
+    - "Distribution"
+    - "Overt Dump"
     - "Ambiguous"
 
 # State classifier

@@ -831,5 +831,5 @@ def make_turnover_exempt(n_days: int = 30) -> dict:
     return {
         "current_deltas": [0.01] * n_days,
         "candidate_deltas": [0.05] * n_days,
-        "current_state": "Exhaustion",
+        "current_state": "Distribution",
     }

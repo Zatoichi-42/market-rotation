@@ -1,18 +1,36 @@
 """
-Shared styling — exact Tailwind dark-theme colors per Phase 3 spec.
+Shared styling — 5-state color model.
 
-Analysis state → (background hex, text hex)
+Spectrum: Overt Dump (deep red) → Distribution (light red) →
+          Ambiguous (none) → Accumulation (light green) → Overt Pump (deep green)
 """
 from engine.schemas import AnalysisState
 
-# Spec §Feature 5: exact hex colors for dark theme
+# Row background + text colors for dark theme
 STATE_COLORS = {
-    "Broadening":        ("#064e3b", "#34d399"),  # Dark green bg, green text
-    "Overt Pump":        ("#064e3b", "#34d399"),  # Same green family
-    "Exhaustion":        ("#7c2d12", "#fb923c"),  # Dark orange bg, orange text
-    "Rotation/Reversal": ("#7f1d1d", "#f87171"),  # Dark red bg, red text
-    "Ambiguous":         ("#713f12", "#fbbf24"),  # Dark yellow bg, yellow text
-    "Accumulation":      ("#1e293b", "#94a3b8"),  # Dark slate bg, gray text
+    "Overt Dump":    ("#7f1d1d", "#f87171"),   # Deep red bg, red text
+    "Distribution":  ("#7c2d12", "#fb923c"),   # Light red/orange bg, orange text
+    "Ambiguous":     ("", ""),                  # No color — transparent
+    "Accumulation":  ("#064e3b", "#34d399"),   # Light green bg, green text
+    "Overt Pump":    ("#052e16", "#22c55e"),   # Deep green bg, bright green text
+}
+
+# Bar chart colors
+STATE_BAR_COLORS = {
+    "Overt Dump":    "#ef4444",   # Red
+    "Distribution":  "#fb923c",   # Orange-red
+    "Ambiguous":     "#64748b",   # Gray
+    "Accumulation":  "#4ade80",   # Light green
+    "Overt Pump":    "#22c55e",   # Deep green
+}
+
+# Momentum spectrum (for interpretation panel)
+MOMENTUM_COLORS = {
+    "Overt Dump":    "#7f1d1d",
+    "Distribution":  "#ef4444",
+    "Ambiguous":     "#64748b",
+    "Accumulation":  "#4ade80",
+    "Overt Pump":    "#064e3b",
 }
 
 TRADE_STATE_COLORS = {
@@ -28,22 +46,12 @@ TRADE_STATE_COLORS = {
     "No Trade":         "#475569",
 }
 
-# Bar chart colors keyed by state (for composite chart)
-STATE_BAR_COLORS = {
-    "Broadening":        "#22c55e",  # Green
-    "Overt Pump":        "#22c55e",  # Green
-    "Exhaustion":        "#f97316",  # Orange
-    "Rotation/Reversal": "#ef4444",  # Red
-    "Ambiguous":         "#eab308",  # Yellow
-    "Accumulation":      "#94a3b8",  # Gray
-}
-
 
 def color_row_by_state(row, state_col: str = "State"):
-    """Apply bg + text color from STATE_COLORS based on the State column."""
+    """Apply bg + text color based on State column."""
     state_val = row.get(state_col, "")
     colors = STATE_COLORS.get(state_val)
-    if colors:
+    if colors and colors[0]:  # Has color defined
         bg, fg = colors
         return [f"background-color: {bg}; color: {fg}"] * len(row)
     return [""] * len(row)
@@ -63,7 +71,7 @@ def color_delta(val: str) -> str:
 
 
 def style_dataframe(df, state_col="State", delta_col="Delta"):
-    """Apply row bg/text coloring + delta coloring."""
+    """Apply row coloring + delta coloring."""
     styled = df.style.apply(color_row_by_state, axis=1, state_col=state_col)
     if delta_col in df.columns:
         styled = styled.map(color_delta, subset=[delta_col])

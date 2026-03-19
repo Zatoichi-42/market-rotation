@@ -23,13 +23,12 @@ class TestEnums:
         assert len(SignalLevel) == 3
 
     def test_analysis_state_values(self):
-        assert AnalysisState.ACCUMULATION.value == "Accumulation"
-        assert AnalysisState.BROADENING.value == "Broadening"
-        assert AnalysisState.OVERT_PUMP.value == "Overt Pump"
-        assert AnalysisState.EXHAUSTION.value == "Exhaustion"
-        assert AnalysisState.ROTATION.value == "Rotation/Reversal"
+        assert AnalysisState.OVERT_DUMP.value == "Overt Dump"
+        assert AnalysisState.DISTRIBUTION.value == "Distribution"
         assert AnalysisState.AMBIGUOUS.value == "Ambiguous"
-        assert len(AnalysisState) == 6
+        assert AnalysisState.ACCUMULATION.value == "Accumulation"
+        assert AnalysisState.OVERT_PUMP.value == "Overt Pump"
+        assert len(AnalysisState) == 5
 
     def test_transition_pressure_values(self):
         assert TransitionPressure.UP.value == "Up"
@@ -110,14 +109,14 @@ class TestStateClassification:
     def test_creation(self):
         sc = StateClassification(
             ticker="XLK", name="Technology",
-            state=AnalysisState.BROADENING,
+            state=AnalysisState.ACCUMULATION,
             confidence=72, sessions_in_state=6,
             transition_pressure=TransitionPressure.UP,
             prior_state=AnalysisState.ACCUMULATION,
             state_changed=False,
             explanation="Pump delta positive 6 sessions",
         )
-        assert sc.state == AnalysisState.BROADENING
+        assert sc.state == AnalysisState.ACCUMULATION
         assert sc.confidence == 72
         assert sc.prior_state == AnalysisState.ACCUMULATION
 

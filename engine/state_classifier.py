@@ -157,61 +157,53 @@ def _determine_state(
         else:
             break
 
-    min_broadening_pctl = settings["broadening"]["min_pump_percentile"]
-    min_broadening_sessions = settings["broadening"]["rs_delta_positive_sessions"]
-    min_overt_pctl = settings["overt_pump"]["min_pump_percentile"]
-    min_exhaust_nonpos = settings["exhaustion"]["pump_delta_nonpositive_sessions"]
-    max_ambiguous = settings["ambiguous"]["max_duration"]
+    min_overt_pctl = settings.get("overt_pump", {}).get("min_pump_percentile", 75)
+    min_dist_nonpos = settings.get("exhaustion", {}).get("pump_delta_nonpositive_sessions", 3)
+    max_ambiguous = settings.get("ambiguous", {}).get("max_duration", 15)
 
     # ── Forced exit from Ambiguous at max duration ──
     if prior_state == AnalysisState.AMBIGUOUS and prior_sessions >= max_ambiguous:
-        # Force reclassification — fall through to normal logic below
-        # but prevent re-entering ambiguous
-        pass
-    # ── Stay in Ambiguous if still mixed ──
+        pass  # Fall through to reclassify
     elif prior_state == AnalysisState.AMBIGUOUS and is_mixed:
         return AnalysisState.AMBIGUOUS
 
-    # ── Overt Pump: top quartile + top 3 rank + delta positive ──
+    # ── OVERT PUMP: top quartile + top 3 rank + delta positive ──
     if pump_percentile >= min_overt_pctl and rs_rank <= 3 and delta > _DELTA_NEAR_ZERO:
         return AnalysisState.OVERT_PUMP
 
-    # ── Exhaustion: was in high state + delta nonpositive 3+ sessions ──
-    if (prior_state in (AnalysisState.OVERT_PUMP, AnalysisState.BROADENING)
-            and consec_nonpositive >= min_exhaust_nonpos):
-        return AnalysisState.EXHAUSTION
-
-    # ── Rotation via Reversal Score (Phase 2): Exhaustion + high reversal ──
-    if (prior_state == AnalysisState.EXHAUSTION
+    # ── OVERT DUMP: via reversal score (Distribution + high reversal) ──
+    if (prior_state == AnalysisState.DISTRIBUTION
             and reversal_score is not None
             and reversal_score.above_75th):
-        return AnalysisState.ROTATION
+        return AnalysisState.OVERT_DUMP
 
-    # ── Rotation: was exhausting + continued decline + rank dropping ──
-    if (prior_state in (AnalysisState.EXHAUSTION, AnalysisState.ROTATION)
+    # ── OVERT DUMP: continued decline + bottom rank ──
+    if (prior_state in (AnalysisState.DISTRIBUTION, AnalysisState.OVERT_DUMP)
             and delta < -_DELTA_NEAR_ZERO and rs_rank >= 7):
-        return AnalysisState.ROTATION
+        return AnalysisState.OVERT_DUMP
 
-    # ── Broadening: positive delta 5+ sessions + above 50th percentile ──
-    if consec_positive >= min_broadening_sessions and pump_percentile >= min_broadening_pctl:
-        return AnalysisState.BROADENING
+    # ── DISTRIBUTION: was strong, now fading ──
+    if (prior_state in (AnalysisState.OVERT_PUMP, AnalysisState.ACCUMULATION)
+            and consec_nonpositive >= min_dist_nonpos):
+        return AnalysisState.DISTRIBUTION
 
-    # ── Ambiguous: mixed signals ──
+    # ── ACCUMULATION: positive delta or building momentum ──
+    if delta > _DELTA_NEAR_ZERO:
+        return AnalysisState.ACCUMULATION
+
+    # ── AMBIGUOUS: mixed signals ──
     if is_mixed:
         return AnalysisState.AMBIGUOUS
 
-    # ── First classification or low score with positive delta → Accumulation ──
+    # ── First classification ──
     if prior is None:
-        return AnalysisState.ACCUMULATION
+        return AnalysisState.AMBIGUOUS
 
-    if delta > _DELTA_NEAR_ZERO and pump_percentile < min_broadening_pctl:
-        return AnalysisState.ACCUMULATION
-
-    # ── Default: stay in prior state if applicable ──
-    if prior_state and prior_state not in (AnalysisState.AMBIGUOUS,):
+    # ── Default: stay in prior state ──
+    if prior_state and prior_state != AnalysisState.AMBIGUOUS:
         return prior_state
 
-    return AnalysisState.ACCUMULATION
+    return AnalysisState.AMBIGUOUS
 
 
 def _compute_pressure(delta_history: list[float], state_changed: bool) -> TransitionPressure:
