@@ -55,15 +55,36 @@ def render_replay_panel(result: dict):
         s = step_map.get(st.session_state.get("rp_step_sel2", "1 day"), 1)
         st.session_state.rp_pos = min(max_idx, st.session_state.rp_pos + s)
 
-    step_col, nav_l, nav_r = st.columns([2, 1, 1])
+    # Jump to date callback
+    def _go_to_date():
+        target = str(st.session_state.get("rp_date_input", ""))
+        if target in available:
+            st.session_state.rp_pos = available.index(target)
+        else:
+            # Find nearest available date
+            for i, d in enumerate(available):
+                if d >= target:
+                    st.session_state.rp_pos = i
+                    return
+            st.session_state.rp_pos = max_idx  # Past all dates → go to last
+
+    step_col, nav_l, nav_r, date_col, go_col = st.columns([1.5, 1, 1, 2, 0.5])
     with step_col:
-        st.selectbox("Step size", list(step_map.keys()), index=0, key="rp_step_sel2")
+        st.selectbox("Step", list(step_map.keys()), index=0, key="rp_step_sel2")
     with nav_l:
         st.button("◄ Back", on_click=_back, key="rp_back5")
     with nav_r:
         st.button("Forward ►", on_click=_fwd, key="rp_fwd5")
+    with date_col:
+        from datetime import date as dt_date
+        min_date = dt_date.fromisoformat(available[0])
+        max_date = dt_date.fromisoformat(available[-1])
+        default_date = dt_date.fromisoformat(available[st.session_state.rp_pos])
+        st.date_input("Go to date", value=default_date, min_value=min_date, max_value=max_date, key="rp_date_input")
+    with go_col:
+        st.markdown("<br>", unsafe_allow_html=True)  # Vertical align
+        st.button("Go", on_click=_go_to_date, key="rp_go_btn")
 
-    # Display current position (read-only — buttons control it)
     current_idx = st.session_state.rp_pos
     sel_date = available[current_idx]
     st.markdown(f"**{sel_date}** &nbsp; (#{current_idx} of {len(available)} | "
