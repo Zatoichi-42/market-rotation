@@ -35,7 +35,7 @@ def _make_snapshot(date: str = "2026-03-18") -> DailySnapshot:
     )
     state = StateClassification(
         ticker="XLK", name="Technology",
-        state=AnalysisState.BROADENING, confidence=72,
+        state=AnalysisState.ACCUMULATION, confidence=72,
         sessions_in_state=6, transition_pressure=TransitionPressure.UP,
         prior_state=AnalysisState.ACCUMULATION, state_changed=False,
         explanation="Broadening confirmed",
@@ -58,7 +58,7 @@ class TestSnapshotRoundTrip:
         assert loaded.sectors[0].ticker == "XLK"
         assert loaded.breadth.signal == BreadthSignal.HEALTHY
         assert loaded.pump_scores[0].pump_score == 0.75
-        assert loaded.states[0].state == AnalysisState.BROADENING
+        assert loaded.states[0].state == AnalysisState.ACCUMULATION
         assert loaded.states[0].prior_state == AnalysisState.ACCUMULATION
 
     def test_load_nonexistent_raises(self, tmp_path):

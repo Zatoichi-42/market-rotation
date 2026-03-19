@@ -1,41 +1,25 @@
-"""Panel 2: Sector table — RS/Performance toggle, sparklines, heat map, valuations."""
+"""Panel 2: Sector table — view toggle, inline sparklines, composite chart, heat map, valuations."""
 import streamlit as st
 import plotly.graph_objects as go
-import plotly.express as px
 import pandas as pd
-import numpy as np
 from engine.schemas import AnalysisState
-
-_ETF_FULL_NAMES = {
-    "XLK": "Technology Select Sector SPDR", "XLV": "Health Care Select Sector SPDR",
-    "XLF": "Financial Select Sector SPDR", "XLE": "Energy Select Sector SPDR",
-    "XLI": "Industrial Select Sector SPDR", "XLU": "Utilities Select Sector SPDR",
-    "XLRE": "Real Estate Select Sector SPDR", "XLC": "Communication Services Select Sector SPDR",
-    "XLY": "Consumer Discretionary Select Sector SPDR", "XLP": "Consumer Staples Select Sector SPDR",
-    "XLB": "Materials Select Sector SPDR", "SPY": "SPDR S&P 500 ETF Trust",
-    "RSP": "Invesco S&P 500 Equal Weight ETF",
-    "HYG": "iShares iBoxx $ High Yield Corporate Bond ETF",
-    "LQD": "iShares iBoxx $ Investment Grade Corporate Bond ETF",
-    "QQQ": "Invesco QQQ Trust (Nasdaq-100)", "IWM": "iShares Russell 2000 ETF",
-    "DIA": "SPDR Dow Jones Industrial Average ETF",
-}
 
 _GLOSSARY = {
     "rank": {"title": "RS Rank (1–11)", "body": "Cross-sectional rank based on 20d RS. 1 = strongest."},
-    "rs": {"title": "Relative Strength", "body": "Sector return minus SPY return over rolling window. Positive = outperforming."},
-    "performance": {"title": "Absolute Performance", "body": "Raw price return over the window, not relative to any benchmark."},
-    "composite": {"title": "RS Composite (0–100)", "body": "Weighted blend: 20% × 5d + 50% × 20d + 30% × 60d, percentile-ranked across sectors."},
-    "pump_score": {"title": "Pump Score (0–1)", "body": "Weighted blend of RS (40%), participation (30%), flow (30%) pillars. Delta = session-over-session change."},
-    "state": {"title": "Analysis State", "body": "Accumulation → Broadening → Overt Pump → Exhaustion → Rotation. Ambiguous = conflicting signals."},
-    "heatmap": {"title": "RS Heat Map", "body": "Each cell shows RS at a given timeframe. Green = outperforming SPY, red = underperforming. Lets you see multi-timeframe alignment at a glance."},
+    "rs": {"title": "Relative Strength", "body": "Sector return minus SPY return over rolling window."},
+    "performance": {"title": "Absolute Performance", "body": "Raw price return, not relative to any benchmark."},
+    "composite": {"title": "RS Composite (0–100)", "body": "Weighted blend: 20%×5d + 50%×20d + 30%×60d, percentile-ranked."},
+    "pump_score": {"title": "Pump Score (0–1)", "body": "RS (40%), participation (30%), flow (30%). Delta = session-over-session change."},
+    "state": {"title": "Analysis State", "body": "Accumulation → Broadening → Overt Pump → Exhaustion → Rotation. Ambiguous = conflicting."},
+    "heatmap": {"title": "RS Heat Map", "body": "Green=outperforming SPY, Red=underperforming. Pattern across columns shows rotation:\n- 🟩🟩🟩 = Sustained leader\n- 🟥🟥🟩 = Former leader decaying (rotation OUT)\n- 🟩🟩🟥 = New leader emerging (rotation IN)"},
 }
 
 
-def _popover(key: str):
-    entry = _GLOSSARY.get(key, {})
+def _popover(key):
+    e = _GLOSSARY.get(key, {})
     with st.popover("ℹ️"):
-        st.markdown(f"**{entry.get('title', key)}**")
-        st.markdown(entry.get("body", ""))
+        st.markdown(f"**{e.get('title', key)}**")
+        st.markdown(e.get("body", ""))
 
 
 def render_sector_table(result: dict):
@@ -47,10 +31,11 @@ def render_sector_table(result: dict):
 
     st.subheader("Sector Rankings")
 
-    # ── View toggle ───────────────────────────────────
+    # ── Feature 1: View Toggle ────────────────────────
     view_col, g1, g2, g3 = st.columns([2, 1, 1, 1])
     with view_col:
-        view = st.selectbox("View", ["Relative Strength (vs SPY)", "Absolute Performance"], key="sector_view")
+        view = st.selectbox("View Mode", ["Relative Strength (vs SPY)", "Absolute Performance"],
+                            index=0, key="sector_view")
     with g1:
         _popover("rs" if "Relative" in view else "performance")
     with g2:
@@ -60,8 +45,10 @@ def render_sector_table(result: dict):
 
     is_rs = "Relative" in view
 
-    # ── Main table ────────────────────────────────────
-    from dashboard.components.style_utils import color_row_by_state
+    # ── Main Table with inline sparklines (Feature 2) ─
+    from dashboard.components.style_utils import style_dataframe
+    from dashboard.components.sparkline import make_sparkline_unicode
+    rev_map = result.get("reversal_map", {})
     rows = []
     for r in rs_readings:
         state = states.get(r.ticker)
@@ -77,47 +64,77 @@ def render_sector_table(result: dict):
         elif r.rs_rank_change < 0:
             rank_arrow = f" ({r.rs_rank_change})"
 
-        rev_map = result.get("reversal_map", {})
         rev = rev_map.get(r.ticker)
         rev_str = f"{rev.reversal_score:.2f}" if rev else "—"
         rev_pct = f"{rev.reversal_percentile:.0f}%" if rev else "—"
         if rev and rev.above_75th:
             rev_pct += " ⚠"
 
+        # Inline unicode sparkline
+        spark = "—"
+        if r.ticker in rs_history.columns:
+            s = rs_history[r.ticker].tail(60).dropna()
+            if not s.empty:
+                spark = make_sparkline_unicode(s, width=12)
+
         if is_rs:
-            row = {
-                "Rank": f"#{r.rs_rank}{rank_arrow}",
-                "Ticker": r.ticker, "Sector": r.name,
-                "RS 5d": f"{r.rs_5d:+.2%}", "RS 20d": f"{r.rs_20d:+.2%}", "RS 60d": f"{r.rs_60d:+.2%}",
-                "Slope": f"{r.rs_slope:+.4f}", "Composite": f"{r.rs_composite:.1f}",
-            }
+            row = {"Rank": f"#{r.rs_rank}{rank_arrow}", "Ticker": r.ticker, "Sector": r.name,
+                   "20d Trend": spark,
+                   "RS 5d": f"{r.rs_5d:+.2%}", "RS 20d": f"{r.rs_20d:+.2%}", "RS 60d": f"{r.rs_60d:+.2%}",
+                   "Slope": f"{r.rs_slope:+.4f}", "Composite": f"{r.rs_composite:.1f}"}
         else:
-            # Absolute performance
             p5 = prices[r.ticker].pct_change(5).iloc[-1] if r.ticker in prices.columns else 0
             p20 = prices[r.ticker].pct_change(20).iloc[-1] if r.ticker in prices.columns else 0
             p60 = prices[r.ticker].pct_change(60).iloc[-1] if r.ticker in prices.columns and len(prices) > 60 else 0
-            row = {
-                "Rank": f"#{r.rs_rank}{rank_arrow}",
-                "Ticker": r.ticker, "Sector": r.name,
-                "Perf 5d": f"{p5:+.2%}", "Perf 20d": f"{p20:+.2%}", "Perf 60d": f"{p60:+.2%}",
-                "Composite": f"{r.rs_composite:.1f}",
-            }
-        row.update({
-            "Pump": f"{pump_score:.2f}", "Delta": f"{pump_delta:+.3f}",
-            "Rev": rev_str, "Rev %ile": rev_pct,
-            "State": state_val, "Conf": f"{state_conf}%",
-        })
+            row = {"Rank": f"#{r.rs_rank}{rank_arrow}", "Ticker": r.ticker, "Sector": r.name,
+                   "20d Trend": spark,
+                   "Perf 5d": f"{p5:+.2%}", "Perf 20d": f"{p20:+.2%}", "Perf 60d": f"{p60:+.2%}",
+                   "Composite": f"{r.rs_composite:.1f}"}
+        row.update({"Pump": f"{pump_score:.2f}", "Delta": f"{pump_delta:+.3f}",
+                     "Rev": rev_str, "Rev %ile": rev_pct,
+                     "State": state_val, "Conf": f"{state_conf}%"})
         rows.append(row)
 
     df = pd.DataFrame(rows)
-    styled = df.style.apply(color_row_by_state, axis=1)
+    styled = style_dataframe(df)
     st.dataframe(styled, width="stretch", hide_index=True)
 
-    # ── Sparklines ────────────────────────────────────
+    # ── Feature 3: Composite Bar Chart (STATE-colored) ─
+    from dashboard.components.composite_chart import make_composite_bar_chart
+    with st.expander("Composite Score Ranking", expanded=True):
+        groups = []
+        for r in rs_readings:
+            state = states.get(r.ticker)
+            groups.append({"ticker": r.ticker, "name": r.name,
+                           "composite": r.rs_composite,
+                           "state": state.state.value if state else "Accumulation"})
+        fig = make_composite_bar_chart(groups, title="Sector Composite Score Ranking")
+        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+
+    # ── Feature 4: RS Heat Map with State column ──────
+    from dashboard.components.heatmap import make_rs_heatmap
+    hdr, info = st.columns([6, 1])
+    with hdr:
+        st.subheader("RS Heat Map")
+    with info:
+        _popover("heatmap")
+
+    hm_groups = []
+    for r in sorted(result["rs_readings"], key=lambda x: x.rs_rank):
+        state = states.get(r.ticker)
+        hm_groups.append({
+            "ticker": r.ticker, "name": r.name,
+            "rs_5d": r.rs_5d, "rs_20d": r.rs_20d, "rs_60d": r.rs_60d,
+            "rs_vs_parent": None,
+            "state": state.state.value if state else "—",
+        })
+    fig = make_rs_heatmap(hm_groups, title="Sector RS Heat Map")
+    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+
+    # ── Plotly Sparklines (3 per row) ─────────────────
     st.subheader("20d RS Sparklines (60 trading days)")
-    n_cols = 3
-    for row_start in range(0, len(rs_readings), n_cols):
-        cols = st.columns(n_cols)
+    for row_start in range(0, len(rs_readings), 3):
+        cols = st.columns(3)
         for j, col in enumerate(cols):
             idx = row_start + j
             if idx >= len(rs_readings):
@@ -125,54 +142,20 @@ def render_sector_table(result: dict):
             r = rs_readings[idx]
             with col:
                 if r.ticker in rs_history.columns:
-                    spark = rs_history[r.ticker].tail(60).dropna()
-                    if not spark.empty:
-                        color = "#00d4aa" if spark.iloc[-1] > 0 else "#ff4444"
-                        fill = "rgba(0,212,170,0.1)" if spark.iloc[-1] > 0 else "rgba(255,68,68,0.1)"
-                        fig = go.Figure(go.Scatter(x=spark.index, y=spark.values, mode="lines",
-                                                   line=dict(color=color, width=2), fill="tozeroy", fillcolor=fill))
+                    sp = rs_history[r.ticker].tail(60).dropna()
+                    if not sp.empty:
+                        color = "#22c55e" if sp.iloc[-1] > 0 else "#ef4444"
+                        fill = "rgba(34,197,94,0.1)" if sp.iloc[-1] > 0 else "rgba(239,68,68,0.1)"
+                        fig = go.Figure(go.Scatter(x=sp.index, y=sp.values, mode="lines",
+                                                   line=dict(color=color, width=2),
+                                                   fill="tozeroy", fillcolor=fill))
                         fig.add_hline(y=0, line_dash="dot", line_color="#555")
                         fig.update_layout(height=120, margin=dict(t=25, b=5, l=5, r=5),
                                           title=dict(text=f"#{r.rs_rank} {r.ticker} — {r.name}", font=dict(size=12)),
-                                          xaxis=dict(visible=False), yaxis=dict(visible=False))
-                        st.plotly_chart(fig, width="stretch")
+                                          xaxis=dict(visible=False), yaxis=dict(visible=False),
+                                          plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
+                        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
-    # ── RS Composite bar chart ────────────────────────
-    st.subheader("RS Composite Score")
-    by_comp = sorted(result["rs_readings"], key=lambda r: r.rs_composite, reverse=True)
-    labels = [f"{r.ticker} ({r.name})" for r in by_comp]
-    vals = [r.rs_composite for r in by_comp]
-    colors = ["#00d4aa" if c > 60 else "#ffa500" if c > 40 else "#ff4444" for c in vals]
-    fig = go.Figure(go.Bar(x=labels, y=vals, marker_color=colors))
-    fig.update_layout(height=300, margin=dict(t=20, b=20), yaxis_title="Composite (0-100)",
-                      xaxis=dict(categoryorder="array", categoryarray=labels))
-    st.plotly_chart(fig, width="stretch")
-
-    # ── Heat Map ──────────────────────────────────────
-    hdr, info = st.columns([6, 1])
-    with hdr:
-        st.subheader("RS Heat Map")
-    with info:
-        _popover("heatmap")
-
-    hm_data = []
-    for r in sorted(result["rs_readings"], key=lambda x: x.rs_rank):
-        hm_data.append({"Sector": f"{r.ticker} ({r.name})", "5d": r.rs_5d * 100, "20d": r.rs_20d * 100, "60d": r.rs_60d * 100})
-    hm_df = pd.DataFrame(hm_data).set_index("Sector")
-    fig = px.imshow(hm_df.values, x=hm_df.columns.tolist(), y=hm_df.index.tolist(),
-                    color_continuous_scale=["#ff4444", "#333333", "#00d4aa"],
-                    color_continuous_midpoint=0, aspect="auto",
-                    labels=dict(color="RS (%)"))
-    fig.update_layout(height=max(300, len(hm_df) * 35), margin=dict(t=20, b=20))
-    st.plotly_chart(fig, width="stretch")
-
-    # ── Valuations ────────────────────────────────────
-    with st.expander("Sector Valuations (from yfinance — updated daily)"):
-        from dashboard.components.valuations import fetch_valuations
-        sector_tickers = [r.ticker for r in rs_readings]
-        val_df = fetch_valuations(sector_tickers)
-        if not val_df.empty:
-            display_cols = [c for c in ["Ticker", "P/E", "Fwd P/E", "P/B", "Div Yield", "AUM ($B)", "% from 52w High", "Expense Ratio"] if c in val_df.columns]
-            st.dataframe(val_df[display_cols], width="stretch", hide_index=True)
-        else:
-            st.info("Valuation data unavailable.")
+    # ── Feature 6: Valuations ─────────────────────────
+    from dashboard.components.valuations import render_valuations_panel
+    render_valuations_panel([r.ticker for r in rs_readings], tab_label="Sector")

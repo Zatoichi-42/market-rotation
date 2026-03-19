@@ -99,9 +99,9 @@ def build_pump_map(
 
     # Sort: state priority, then pump_delta descending
     state_priority = {
-        AnalysisState.OVERT_PUMP: 0, AnalysisState.BROADENING: 1,
-        AnalysisState.ACCUMULATION: 2, AnalysisState.EXHAUSTION: 3,
-        AnalysisState.ROTATION: 4, AnalysisState.AMBIGUOUS: 5,
+        AnalysisState.OVERT_PUMP: 0, AnalysisState.ACCUMULATION: 1,
+        AnalysisState.AMBIGUOUS: 2, AnalysisState.EXHAUSTION: 3,
+        AnalysisState.OVERT_DUMP: 4,
     }
     rows.sort(key=lambda r: (state_priority.get(r.analysis_state, 9), -r.pump_delta))
 

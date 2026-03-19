@@ -44,7 +44,7 @@ def _rev(ticker="XLK", score=0.25, pct=30.0, above=False):
                                 reversal_score=score, sub_signals={}, reversal_percentile=pct, above_75th=above)
 
 
-def _state(ticker="XLK", state=AnalysisState.BROADENING, conf=72):
+def _state(ticker="XLK", state=AnalysisState.ACCUMULATION, conf=72):
     return StateClassification(ticker=ticker, name=ticker, state=state, confidence=conf,
                                sessions_in_state=5, transition_pressure=TransitionPressure.UP,
                                prior_state=None, state_changed=False, explanation="")

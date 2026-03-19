@@ -106,30 +106,25 @@ def explain_state(
     ]
 
     # State-specific context
-    if state == AnalysisState.BROADENING:
-        parts.append(
-            f"Pump score {score:.2f} with delta {delta:+.3f} — "
-            f"momentum building, participation expanding."
-        )
-    elif state == AnalysisState.OVERT_PUMP:
+    if state == AnalysisState.OVERT_PUMP:
         parts.append(
             f"Pump score {score:.2f} (top quartile) with delta {delta:+.3f} — "
             f"strong institutional flow, clear sector leadership."
+        )
+    elif state == AnalysisState.ACCUMULATION:
+        parts.append(
+            f"Pump score {score:.2f} with delta {delta:+.3f} — "
+            f"momentum building, participation expanding."
         )
     elif state == AnalysisState.EXHAUSTION:
         parts.append(
             f"Pump score {score:.2f} with delta {delta:+.3f} — "
             f"momentum fading, watch for rotation signal."
         )
-    elif state == AnalysisState.ACCUMULATION:
-        parts.append(
-            f"Pump score {score:.2f} with delta {delta:+.3f} — "
-            f"early-stage positioning, not yet confirmed."
-        )
-    elif state == AnalysisState.ROTATION:
+    elif state == AnalysisState.OVERT_DUMP:
         parts.append(
             f"Pump score {score:.2f} declining (delta {delta:+.3f}) — "
-            f"capital rotating out, look for receiving sector."
+            f"active rotation out, capital leaving."
         )
     elif state == AnalysisState.AMBIGUOUS:
         parts.append(

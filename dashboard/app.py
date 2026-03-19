@@ -19,6 +19,7 @@ from engine.rs_scanner import compute_rs_readings, compute_rs_all
 from engine.breadth import compute_breadth
 from engine.normalizer import compute_zscore, percentile_rank
 from engine.industry_rs import compute_industry_rs
+from engine.industry_state import classify_all_industries
 from engine.reversal_score import compute_reversal_scores_batch
 from engine.pump_score import compute_pump_score
 from engine.state_classifier import classify_all_sectors
@@ -45,12 +46,13 @@ def load_config():
     return settings, universe
 
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=300)  # 5 min cache — ensures fresh intraday data
 def run_pipeline():
-    """Run the full pipeline and return current snapshot + raw data."""
+    """Run the full pipeline and return current snapshot + raw data.
+    Uses latest available prices (intraday during market hours)."""
     settings, universe = load_config()
     config = {**settings, **universe}
-    data = fetch_all(config)
+    data = fetch_all(config, force_refresh=True)  # Always get latest prices
     prices = data["prices"]
 
     # Regime
@@ -148,6 +150,17 @@ def run_pipeline():
     available_industries = [i for i in industries_cfg if i["ticker"] in prices.columns]
     industry_rs_readings = compute_industry_rs(prices, available_industries) if available_industries else []
 
+    # Compute industry pump score history for real deltas (same pattern as sectors)
+    ind_score_history = {ir.ticker: [] for ir in industry_rs_readings}
+    for i in range(max(0, len(prices) - lookback), len(prices)):
+        day_prices = prices.iloc[:i+1]
+        if len(day_prices) < 20:
+            continue
+        day_ind_rs = compute_industry_rs(day_prices, available_industries) if available_industries else []
+        for ir in day_ind_rs:
+            sc = compute_pump_score(ir.industry_composite, 50.0, 50.0, pump_weights)
+            ind_score_history[ir.ticker].append(sc)
+
     # Reversal Scores (Phase 2) — with rolling history for real percentiles
     from engine.reversal_score import compute_reversal_score
     rev_settings = settings.get("reversal", {})
@@ -177,16 +190,40 @@ def run_pipeline():
     )
     reversal_map = {r.ticker: r for r in reversal_readings}
 
-    # State Classifier (with reversal scores)
-    rs_ranks = {r.ticker: r.rs_rank for r in rs_readings}
+    # Add industry pump scores with real deltas from history
+    for ir in industry_rs_readings:
+        if ir.ticker not in pumps:
+            hist = ind_score_history.get(ir.ticker, [])
+            current_score = hist[-1] if hist else compute_pump_score(ir.industry_composite, 50.0, 50.0, pump_weights)
+            deltas = [hist[j] - hist[j-1] for j in range(1, len(hist))] if len(hist) >= 2 else []
+            delta = deltas[-1] if deltas else 0.0
+            d5 = sum(deltas[-5:]) / len(deltas[-5:]) if deltas else 0.0
+            delta_histories[ir.ticker] = deltas if deltas else [0.0]
+            pumps[ir.ticker] = PumpScoreReading(
+                ticker=ir.ticker, name=ir.name,
+                rs_pillar=ir.industry_composite, participation_pillar=50.0, flow_pillar=50.0,
+                pump_score=current_score, pump_delta=delta, pump_delta_5d_avg=d5,
+            )
+
+    # State Classifier (sectors + industries, with reversal scores)
+    all_ranks = {r.ticker: r.rs_rank for r in rs_readings}
+    for ir in industry_rs_readings:
+        all_ranks[ir.ticker] = ir.rs_rank
     pump_pcts = percentile_rank(pd.Series({t: p.pump_score for t, p in pumps.items()}))
     states = classify_all_sectors(
         pumps=pumps, priors=prior_states, regime=regime.state,
-        rs_ranks=rs_ranks, pump_percentiles=pump_pcts.to_dict(),
+        rs_ranks=all_ranks, pump_percentiles=pump_pcts.to_dict(),
         delta_histories=delta_histories,
         settings=settings["state"],
         reversal_scores=reversal_map,
     )
+
+    # Industry states from multi-timeframe RS pattern
+    industry_states = classify_all_industries(
+        industry_rs_readings, regime=regime.state, reversal_scores=reversal_map,
+    )
+    # Merge industry states into the main states dict
+    states.update(industry_states)
 
     return {
         "regime": regime,
@@ -204,6 +241,7 @@ def run_pipeline():
         "credit": credit,
         "fred_hy_oas": data.get("fred_hy_oas"),
         "industry_rs": industry_rs_readings,
+        "industry_states": industry_states,
         "reversal_scores": reversal_readings,
         "reversal_map": reversal_map,
     }
@@ -211,18 +249,29 @@ def run_pipeline():
 
 def main():
     st.title("Pump Rotation System")
-    st.caption(f"Last updated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
 
     result = run_pipeline()
 
+    prices_last = result["prices"].index[-1].strftime("%Y-%m-%d")
+    st.caption(
+        f"Pipeline: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} | "
+        f"Price data through: **{prices_last}** (today's latest — refreshes every 5 min)"
+    )
+
     # Tab layout
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-        "Regime Gate", "Sector Rankings", "Industries", "Breadth", "Replay", "Debug"
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+        "Regime Gate", "Sector Rankings", "Industries", "Breadth",
+        "Today", "Signal Reliability", "Replay", "Debug",
     ])
 
     with tab1:
         from dashboard.components.regime_panel import render_regime_panel
         render_regime_panel(result)
+        # Baton pass alerts + reversal diagnostics on page 1
+        from dashboard.components.baton_pass_alert import render_baton_pass_alerts
+        render_baton_pass_alerts(result)
+        from dashboard.components.reversal_diagnostics import render_reversal_diagnostics
+        render_reversal_diagnostics(result)
 
     with tab2:
         from dashboard.components.sector_table import render_sector_table
@@ -237,10 +286,18 @@ def main():
         render_breadth_chart(result)
 
     with tab5:
+        from dashboard.components.interpretation_panel import render_interpretation_panel
+        render_interpretation_panel(result)
+
+    with tab6:
+        from dashboard.components.signal_reliability import render_signal_reliability
+        render_signal_reliability(result)
+
+    with tab7:
         from dashboard.components.replay_panel import render_replay_panel
         render_replay_panel(result)
 
-    with tab6:
+    with tab8:
         from dashboard.components.debug_panel import render_debug_panel
         render_debug_panel(result)
 

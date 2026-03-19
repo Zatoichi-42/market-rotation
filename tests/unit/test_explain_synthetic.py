@@ -28,7 +28,7 @@ def _make_regime(state: RegimeState, signals: list[tuple[str, float, SignalLevel
 
 def _make_state(
     ticker: str = "XLK", name: str = "Technology",
-    state: AnalysisState = AnalysisState.BROADENING,
+    state: AnalysisState = AnalysisState.ACCUMULATION,
     confidence: int = 72, sessions: int = 6,
     pressure: TransitionPressure = TransitionPressure.UP,
     prior: AnalysisState = AnalysisState.ACCUMULATION,
@@ -197,10 +197,10 @@ class TestExplainRegime:
 class TestExplainState:
 
     def test_broadening_explanation(self):
-        sc = _make_state(state=AnalysisState.BROADENING, confidence=72, sessions=6)
+        sc = _make_state(state=AnalysisState.ACCUMULATION, confidence=72, sessions=6)
         pump = _make_pump(delta=0.03)
         result = explain_state(sc, pump, RegimeState.NORMAL)
-        assert "Broadening" in result
+        assert "Accumulation" in result
         assert "72" in result or "confidence" in result.lower()
 
     def test_exhaustion_explanation(self):
@@ -223,11 +223,11 @@ class TestExplainState:
         assert "Accumulation" in result
 
     def test_rotation_explanation(self):
-        sc = _make_state(state=AnalysisState.ROTATION, confidence=60, sessions=2,
+        sc = _make_state(state=AnalysisState.OVERT_DUMP, confidence=60, sessions=2,
                          pressure=TransitionPressure.DOWN)
         pump = _make_pump(score=0.40, delta=-0.05)
         result = explain_state(sc, pump, RegimeState.NORMAL)
-        assert "Rotation" in result
+        assert "Overt Dump" in result
 
     def test_ambiguous_explanation(self):
         sc = _make_state(state=AnalysisState.AMBIGUOUS, confidence=30, sessions=5)
@@ -237,7 +237,7 @@ class TestExplainState:
 
     def test_hostile_regime_noted_in_explanation(self):
         """When regime is HOSTILE, explanation should mention it."""
-        sc = _make_state(state=AnalysisState.BROADENING, confidence=50)
+        sc = _make_state(state=AnalysisState.ACCUMULATION, confidence=50)
         pump = _make_pump()
         result = explain_state(sc, pump, RegimeState.HOSTILE)
         assert "HOSTILE" in result

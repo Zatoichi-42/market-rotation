@@ -54,11 +54,15 @@ def fetch_all(config: dict, force_refresh: bool = False) -> dict:
     warnings = []
     errors = []
 
-    # Fetch equity prices
+    # Fetch equity prices (daily bars — may be stale during market hours)
     prices, volumes, highs, lows = _fetch_yfinance_equities(all_tickers, period, errors, warnings)
 
-    # Fetch VIX data
+    # Overlay live intraday quotes on today's row
+    prices, highs, lows = _overlay_live_quotes(prices, highs, lows, all_tickers, warnings)
+
+    # Fetch VIX data + overlay live VIX quote
     vix, vix3m = _fetch_vix(period, errors, warnings)
+    vix, vix3m = _overlay_live_vix(vix, vix3m, warnings)
 
     # Credit data from equities
     credit = pd.DataFrame(index=prices.index)
@@ -74,6 +78,8 @@ def fetch_all(config: dict, force_refresh: bool = False) -> dict:
         "fetch_timestamp": datetime.now(timezone.utc).isoformat(),
         "tickers": list(prices.columns),
         "rows": len(prices),
+        "last_price_date": str(prices.index[-1].date()) if not prices.empty else "N/A",
+        "live_overlay": True,
         "errors": errors,
         "warnings": warnings,
     }
@@ -169,6 +175,63 @@ def _fetch_vix(
         except Exception as e:
             warnings.append(f"{name} fetch failed: {e}")
 
+    return vix, vix3m
+
+
+def _overlay_live_quotes(
+    prices: pd.DataFrame, highs: pd.DataFrame, lows: pd.DataFrame,
+    tickers: list[str], warnings: list,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """
+    Patch today's row in prices/highs/lows with live intraday quotes.
+    yf.download daily bars may be stale (yesterday's close) during market hours.
+    yf.Ticker.info['regularMarketPrice'] gives the actual live quote.
+    """
+    if prices.empty:
+        return prices, highs, lows
+
+    today = prices.index[-1]
+    updated = 0
+
+    for t in tickers:
+        if t not in prices.columns:
+            continue
+        try:
+            info = yf.Ticker(t).info
+            live_price = info.get("regularMarketPrice")
+            if live_price and live_price > 0:
+                current = prices.at[today, t]
+                if abs(live_price - current) / max(current, 0.01) > 0.0001:
+                    prices.at[today, t] = live_price
+                    # Update high/low if live price exceeds
+                    if t in highs.columns:
+                        highs.at[today, t] = max(highs.at[today, t], live_price)
+                    if t in lows.columns:
+                        lows.at[today, t] = min(lows.at[today, t], live_price)
+                    updated += 1
+        except Exception:
+            pass  # Silent — live overlay is best-effort
+
+    if updated > 0:
+        logger.info(f"Live quote overlay: updated {updated} tickers")
+
+    return prices, highs, lows
+
+
+def _overlay_live_vix(
+    vix: pd.Series, vix3m: pd.Series, warnings: list,
+) -> tuple[pd.Series, pd.Series]:
+    """Patch VIX/VIX3M with live quotes during market hours."""
+    for ticker, series, name in [("^VIX", vix, "vix"), ("^VIX3M", vix3m, "vix3m")]:
+        if series.empty:
+            continue
+        try:
+            info = yf.Ticker(ticker).info
+            live = info.get("regularMarketPrice")
+            if live and live > 0:
+                series.iloc[-1] = live
+        except Exception:
+            pass
     return vix, vix3m
 
 

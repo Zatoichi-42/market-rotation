@@ -111,7 +111,7 @@ class TestPumpMapRow:
             regime_state=RegimeState.NORMAL,
             pump_score=0.72, pump_delta=0.03, pump_delta_5d_avg=0.02,
             reversal_score=0.25, reversal_percentile=30.0,
-            analysis_state=AnalysisState.BROADENING,
+            analysis_state=AnalysisState.ACCUMULATION,
             transition_pressure=TransitionPressure.UP, confidence=72,
             rs_composite=80.0, rs_rank=1, rs_rank_change=2,
             rs_vs_parent=None,
