@@ -30,6 +30,18 @@ class AnalysisState(Enum):
     OVERT_PUMP = "Overt Pump"        # Deep green — strongest inflow
 
 
+class TradeState(Enum):
+    """What the operator should DO, not what the sector IS."""
+    LONG_ENTRY = "Long Entry"
+    HOLD = "Hold"
+    SELECTIVE_ADD = "Selective Add"
+    REDUCE = "Reduce"
+    PAIR_CANDIDATE = "Pair Cand."
+    HEDGE = "Hedge"
+    WATCHLIST = "Watchlist"
+    NO_TRADE = "No Trade"
+
+
 class TransitionPressure(Enum):
     UP = "Up"
     STABLE = "Stable"
@@ -305,6 +317,23 @@ class ConcentrationReading:
     explanation: str
 
 
+# ── Trade State Assignment (Phase 3) ──────────────────
+
+@dataclass
+class TradeStateAssignment:
+    """Dual-column output: Analysis State + Trade State."""
+    ticker: str
+    name: str
+    analysis_state: AnalysisState
+    trade_state: TradeState
+    confidence: int
+    entry_trigger: str
+    invalidation: str
+    size_class: str
+    catalyst_note: str
+    explanation: str
+
+
 # ── Snapshot (for replay) ──────────────────────────────
 
 @dataclass
@@ -320,6 +349,7 @@ class DailySnapshot:
     industry_rs: list = field(default_factory=list)
     reversal_scores: list = field(default_factory=list)
     pump_map: list = field(default_factory=list)
+    trade_states: list = field(default_factory=list)
     # Gap fix additions
     catalyst: Optional[CatalystAssessment] = None
     concentration: list = field(default_factory=list)

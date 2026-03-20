@@ -268,12 +268,24 @@ def run_pipeline():
     # Merge industry states into the main states dict
     states.update(industry_states)
 
+    # Trade State Mapper (Layer 4)
+    from engine.trade_state_mapper import map_all_trade_states
+    all_ranks_for_trade = {r.ticker: r.rs_rank for r in rs_readings}
+    for ir in industry_rs_readings:
+        all_ranks_for_trade[ir.ticker] = ir.rs_rank
+    trade_states = map_all_trade_states(
+        states=states, pumps=pumps, regime=regime.state,
+        catalyst=catalyst_assessment, rs_ranks=all_ranks_for_trade,
+        reversal_scores=reversal_map, concentrations=concentration_map,
+    )
+
     return {
         "regime": regime,
         "rs_readings": rs_readings,
         "breadth": breadth_reading,
         "pumps": pumps,
         "states": states,
+        "trade_states": trade_states,
         "prices": prices,
         "vix": data["vix"],
         "vix3m": data["vix3m"],

@@ -333,6 +333,25 @@ def _build_claude_xml(result: dict) -> str:
         L.append('    </sector>')
     L.append('  </sectors>')
 
+    # ── Trade States ──
+    trade_states = result.get("trade_states", {})
+    if trade_states:
+        L.append('  <trade_states description="Dual-column: Analysis State + Trade State. '
+                 'Trade State = what to DO. Entry trigger, invalidation, and size class included.">')
+        for r in rs_readings:
+            ts = trade_states.get(r.ticker)
+            if ts:
+                L.append(f'    <trade ticker="{r.ticker}" name="{X(ts.name)}"'
+                         f' analysis="{X(ts.analysis_state.value)}"'
+                         f' trade="{X(ts.trade_state.value)}"'
+                         f' confidence="{ts.confidence}"'
+                         f' entry="{X(ts.entry_trigger)}"'
+                         f' invalidation="{X(ts.invalidation)}"'
+                         f' size="{X(ts.size_class)}"'
+                         f' catalyst="{X(ts.catalyst_note)}"'
+                         f' explanation="{X(ts.explanation)}"/>')
+        L.append('  </trade_states>')
+
     # ── Industry Heatmap (text) ──
     if industry_rs:
         L.append('  <industry_heatmap description="Industry RS Heat Map: same as sector heatmap but includes '

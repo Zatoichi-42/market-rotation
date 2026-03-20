@@ -31,6 +31,8 @@ _STATE_ORDER = ["Overt Dump", "Exhaustion", "Ambiguous", "Accumulation", "Overt 
 
 
 def render_interpretation_panel(result: dict):
+    _render_operator_map(result)
+
     prices = result["prices"]
     rs_readings = result.get("rs_readings", [])
     states = result.get("states", {})
@@ -226,3 +228,54 @@ def render_interpretation_panel(result: dict):
 
     for obs in observations:
         st.markdown(obs)
+
+
+def _render_operator_map(result: dict):
+    """Dual-column Operator Pump Map — THE decision output."""
+    import pandas as pd
+    trade_states = result.get("trade_states", {})
+    rs_readings = result.get("rs_readings", [])
+    if not trade_states or not rs_readings:
+        return
+
+    st.subheader("Operator Pump Map")
+    st.caption("Analysis State = what IS happening. Trade State = what to DO.")
+
+    rows = []
+    for r in sorted(rs_readings, key=lambda x: x.rs_rank):
+        ts = trade_states.get(r.ticker)
+        if ts:
+            rows.append({
+                "Rank": r.rs_rank,
+                "Sector": f"{r.ticker} ({r.name})",
+                "Analysis": ts.analysis_state.value,
+                "Trade": ts.trade_state.value,
+                "Entry": ts.entry_trigger,
+                "Size": ts.size_class,
+                "Invalidation": ts.invalidation,
+                "Conf": f"{ts.confidence}%",
+            })
+
+    if not rows:
+        return
+
+    df = pd.DataFrame(rows)
+
+    _TRADE_COLORS = {
+        "Long Entry": "background-color: #064e3b; color: #34d399;",
+        "Selective Add": "background-color: #1e3a5f; color: #93c5fd;",
+        "Hold": "color: #9ca3af;",
+        "Watchlist": "color: #6b7280;",
+        "No Trade": "color: #4b5563;",
+        "Reduce": "background-color: #7c2d12; color: #fb923c;",
+        "Pair Cand.": "background-color: #7f1d1d; color: #f87171;",
+        "Hedge": "background-color: #450a0a; color: #fca5a5;",
+    }
+
+    def _color_trade(val):
+        return _TRADE_COLORS.get(val, "")
+
+    from dashboard.components.style_utils import color_row_by_state
+    styled = df.style.apply(color_row_by_state, axis=1, state_col="Analysis")
+    styled = styled.map(_color_trade, subset=["Trade"])
+    st.dataframe(styled, width="stretch", hide_index=True)

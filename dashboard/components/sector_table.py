@@ -95,10 +95,17 @@ def render_sector_table(result: dict):
         conc = conc_map.get(r.ticker)
         conc_str = conc.regime.value.split()[-1] if conc else "—"  # "Healthy"/"Fragile"/"Unhealthy"
 
+        # Trade state
+        trade_states = result.get("trade_states", {})
+        ts = trade_states.get(r.ticker)
+        trade_val = ts.trade_state.value if ts else "—"
+        size_val = ts.size_class if ts else "—"
+
         row.update({"Pump": f"{pump_score:.2f}", "Delta": f"{pump_delta:+.3f}",
                      "Rev": rev_str, "Rev %ile": rev_pct,
                      "Conc": conc_str,
-                     "State": state_val, "Conf": f"{state_conf}%"})
+                     "State": state_val, "Trade": trade_val, "Size": size_val,
+                     "Conf": f"{state_conf}%"})
         rows.append(row)
 
     df = pd.DataFrame(rows)
