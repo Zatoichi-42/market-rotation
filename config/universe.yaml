@@ -147,6 +147,10 @@ industries:
     name: "Gold Miners"
     parent_sector: "XLB"
     tier: "T1"
+  - ticker: "SIL"
+    name: "Silver Miners"
+    parent_sector: "XLB"
+    tier: "T1"
   # Real Estate
   - ticker: "VNQ"
     name: "REITs"
@@ -172,6 +176,11 @@ commodities:
   oil_wti: "CL=F"        # WTI Crude futures
   oil_brent: "BZ=F"      # Brent Crude futures
   gold: "GC=F"           # Gold futures
+
+# Precious metals for regime modifiers
+market_modifiers:
+  gold: "GLD"             # Physical gold ETF — for gold/silver ratio
+  silver: "SLV"           # Physical silver ETF — for gold/silver ratio
 
 # Top 5 holdings per sector ETF — for concentration monitor
 # Updated quarterly. Source: SSGA/iShares fund pages.

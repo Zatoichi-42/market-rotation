@@ -8,11 +8,11 @@ from dashboard.components.style_utils import STATE_COLORS, STATE_BAR_COLORS, MOM
 import pandas as pd
 
 
-class TestFiveStateModel:
-    """Verify the 5-state enum is exactly right."""
+class TestSevenStateModel:
+    """Verify the 7-state symmetric enum is exactly right."""
 
-    def test_exactly_five_states(self):
-        assert len(AnalysisState) == 5
+    def test_exactly_seven_states(self):
+        assert len(AnalysisState) == 7
 
     def test_overt_dump_exists(self):
         assert AnalysisState.OVERT_DUMP.value == "Overt Dump"
@@ -20,26 +20,32 @@ class TestFiveStateModel:
     def test_exhaustion_exists(self):
         assert AnalysisState.EXHAUSTION.value == "Exhaustion"
 
+    def test_distribution_exists(self):
+        assert AnalysisState.DISTRIBUTION.value == "Distribution"
+
     def test_ambiguous_exists(self):
         assert AnalysisState.AMBIGUOUS.value == "Ambiguous"
 
     def test_accumulation_exists(self):
         assert AnalysisState.ACCUMULATION.value == "Accumulation"
 
+    def test_broadening_exists(self):
+        assert AnalysisState.BROADENING.value == "Broadening"
+
     def test_overt_pump_exists(self):
         assert AnalysisState.OVERT_PUMP.value == "Overt Pump"
 
-    def test_no_broadening(self):
-        """Broadening was merged into Accumulation."""
-        assert not hasattr(AnalysisState, "BROADENING")
-
     def test_no_rotation(self):
-        """Rotation was renamed to Overt Dump."""
+        """Rotation/Reversal state no longer exists."""
         assert not hasattr(AnalysisState, "ROTATION")
 
-    def test_no_distribution(self):
-        """Distribution was renamed back to Exhaustion."""
-        assert not hasattr(AnalysisState, "DISTRIBUTION")
+    def test_symmetry(self):
+        """3 bullish + 3 bearish + 1 neutral = 7."""
+        bullish = [AnalysisState.ACCUMULATION, AnalysisState.BROADENING, AnalysisState.OVERT_PUMP]
+        bearish = [AnalysisState.DISTRIBUTION, AnalysisState.EXHAUSTION, AnalysisState.OVERT_DUMP]
+        neutral = [AnalysisState.AMBIGUOUS]
+        assert len(bullish) == len(bearish) == 3
+        assert len(neutral) == 1
 
 
 class TestStateColors:

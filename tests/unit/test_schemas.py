@@ -25,10 +25,12 @@ class TestEnums:
     def test_analysis_state_values(self):
         assert AnalysisState.OVERT_DUMP.value == "Overt Dump"
         assert AnalysisState.EXHAUSTION.value == "Exhaustion"
+        assert AnalysisState.DISTRIBUTION.value == "Distribution"
         assert AnalysisState.AMBIGUOUS.value == "Ambiguous"
         assert AnalysisState.ACCUMULATION.value == "Accumulation"
+        assert AnalysisState.BROADENING.value == "Broadening"
         assert AnalysisState.OVERT_PUMP.value == "Overt Pump"
-        assert len(AnalysisState) == 5
+        assert len(AnalysisState) == 7
 
     def test_transition_pressure_values(self):
         assert TransitionPressure.UP.value == "Up"

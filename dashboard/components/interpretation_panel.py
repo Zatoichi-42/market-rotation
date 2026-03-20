@@ -18,16 +18,19 @@ _SECTOR_NAMES = {
     "XLY": "Consumer Discretionary", "XLP": "Consumer Staples", "XLB": "Materials",
 }
 
-# Deep red → red → yellow → green → deep green (overt dump to overt pump)
+# Deep red → red → salmon → gray → light green → green → deep green
 _MOMENTUM_COLORS = {
     "Overt Dump":    "#7f1d1d",   # Deep red
-    "Exhaustion":  "#ef4444",   # Light red
+    "Exhaustion":    "#ef4444",   # Red
+    "Distribution":  "#fbbf24",   # Salmon/yellow
     "Ambiguous":     "#64748b",   # Gray
-    "Accumulation":  "#4ade80",   # Light green
+    "Accumulation":  "#a5d6a7",   # Light green
+    "Broadening":    "#4ade80",   # Green
     "Overt Pump":    "#064e3b",   # Deep green
 }
 
-_STATE_ORDER = ["Overt Dump", "Exhaustion", "Ambiguous", "Accumulation", "Overt Pump"]
+_STATE_ORDER = ["Overt Dump", "Exhaustion", "Distribution", "Ambiguous",
+                "Accumulation", "Broadening", "Overt Pump"]
 
 
 def render_interpretation_panel(result: dict):
@@ -49,10 +52,17 @@ def render_interpretation_panel(result: dict):
     st.caption(f"Using latest prices as of **{last_date.strftime('%Y-%m-%d')}** "
                f"(intraday during market hours, close after hours)")
 
+    def _safe_return(series, n):
+        """Compute n-period return from last valid values. Handles after-hours NaN."""
+        vals = series.dropna()
+        if len(vals) <= n:
+            return 0.0
+        return float(vals.iloc[-1] / vals.iloc[-(n + 1)] - 1)
+
     # ── Market Summary ────────────────────────────────
     # 1d = today's latest vs yesterday's close. All metrics use today as endpoint.
-    spy_1d = prices["SPY"].pct_change().iloc[-1] if "SPY" in prices.columns else 0
-    spy_5d = prices["SPY"].pct_change(5).iloc[-1] if "SPY" in prices.columns and len(prices) > 5 else 0
+    spy_1d = _safe_return(prices["SPY"], 1) if "SPY" in prices.columns else 0
+    spy_5d = _safe_return(prices["SPY"], 5) if "SPY" in prices.columns else 0
 
     move_desc = "sharp sell-off" if spy_1d < -0.01 else "sell-off" if spy_1d < -0.005 else "decline" if spy_1d < -0.001 else "flat" if abs(spy_1d) < 0.001 else "rally" if spy_1d < 0.01 else "strong rally"
 
@@ -65,14 +75,53 @@ def render_interpretation_panel(result: dict):
         f"</div>", unsafe_allow_html=True,
     )
 
-    # ── Sector 1d Waterfall ───────────────────────────
-    st.subheader("Sector 1d RS Waterfall")
-    st.caption("Bar color = Analysis State. Size = 1d RS magnitude vs SPY.")
+    # ── Sector RS Waterfalls (1d/5d/20d/60d) ────────────
+    st.subheader("Sector RS Waterfalls")
+    st.caption("Bar color = Analysis State. Size = RS magnitude vs SPY.")
 
+    _PERIOD_DAYS = {"1d": 1, "5d": 5, "20d": 20, "60d": 60}
+    for period_label, n in _PERIOD_DAYS.items():
+        if len(prices) <= n:
+            continue
+        spy_nd = _safe_return(prices["SPY"], n) if "SPY" in prices.columns else 0
+        sector_nd = []
+        for r in rs_readings:
+            if r.ticker in prices.columns:
+                sec_nd = _safe_return(prices[r.ticker], n)
+                rs_nd = sec_nd - spy_nd
+                state = states.get(r.ticker)
+                sector_nd.append({
+                    "ticker": r.ticker, "name": _SECTOR_NAMES.get(r.ticker, r.ticker),
+                    "return": sec_nd, "rs": rs_nd,
+                    "state": state.state.value if state else "—",
+                    "pump_delta": pumps[r.ticker].pump_delta if r.ticker in pumps else 0,
+                })
+        sector_nd.sort(key=lambda x: x["rs"], reverse=True)
+        labels = [f"{s['ticker']} ({s['name']})" for s in sector_nd]
+        rs_vals = [s["rs"] * 100 for s in sector_nd]
+        colors = [_MOMENTUM_COLORS.get(s["state"], "#94a3b8") for s in sector_nd]
+
+        fig = go.Figure(go.Bar(
+            y=labels, x=rs_vals, orientation="h",
+            marker_color=colors,
+            text=[f"{v:+.2f}%" for v in rs_vals],
+            textposition="outside", textfont=dict(size=11),
+        ))
+        fig.add_vline(x=0, line_color="#555", line_width=2)
+        fig.update_layout(
+            height=max(300, len(labels) * 32), margin=dict(t=10, b=10, l=10, r=60),
+            xaxis=dict(title=f"{period_label} RS vs SPY (%)", showgrid=False),
+            yaxis=dict(categoryorder="array", categoryarray=list(reversed(labels)), showgrid=False),
+            plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+        )
+        st.markdown(f"**{period_label}**")
+        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+
+    # Build sector_1d for momentum spectrum / observations below
     sector_1d = []
     for r in rs_readings:
         if r.ticker in prices.columns:
-            sec_1d = prices[r.ticker].pct_change().iloc[-1]
+            sec_1d = _safe_return(prices[r.ticker], 1)
             rs_1d = sec_1d - spy_1d
             state = states.get(r.ticker)
             sector_1d.append({
@@ -81,26 +130,6 @@ def render_interpretation_panel(result: dict):
                 "state": state.state.value if state else "—",
                 "pump_delta": pumps[r.ticker].pump_delta if r.ticker in pumps else 0,
             })
-
-    sector_1d.sort(key=lambda x: x["rs_1d"], reverse=True)
-    labels = [f"{s['ticker']} ({s['name']})" for s in sector_1d]
-    rs_vals = [s["rs_1d"] * 100 for s in sector_1d]
-    colors = [_MOMENTUM_COLORS.get(s["state"], "#94a3b8") for s in sector_1d]
-
-    fig = go.Figure(go.Bar(
-        y=labels, x=rs_vals, orientation="h",
-        marker_color=colors,
-        text=[f"{v:+.2f}%" for v in rs_vals],
-        textposition="outside", textfont=dict(size=11),
-    ))
-    fig.add_vline(x=0, line_color="#555", line_width=2)
-    fig.update_layout(
-        height=max(300, len(labels) * 32), margin=dict(t=10, b=10, l=10, r=60),
-        xaxis=dict(title="1d RS vs SPY (%)", showgrid=False),
-        yaxis=dict(categoryorder="array", categoryarray=list(reversed(labels)), showgrid=False),
-        plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-    )
-    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
     # ── Momentum Spectrum ─────────────────────────────
     st.subheader("Momentum Spectrum: Overt Dump ← → Overt Pump")
@@ -144,42 +173,45 @@ def render_interpretation_panel(result: dict):
             f"</div>", unsafe_allow_html=True,
         )
 
-    # ── Industry Leaders/Laggards Today ───────────────
+    # ── Industry Leaders/Laggards (1d/5d/20d/60d) ─────
     if industry_rs:
-        st.subheader("Industry 1d Leaders & Laggards")
-        ind_1d = []
-        for ir in industry_rs:
-            if ir.ticker in prices.columns:
-                sec_1d = prices[ir.ticker].pct_change().iloc[-1]
-                rs_1d = sec_1d - spy_1d
-                ind_1d.append({
-                    "ticker": ir.ticker, "name": ir.name,
-                    "parent": _SECTOR_NAMES.get(ir.parent_sector, ir.parent_sector),
-                    "rs_1d": rs_1d, "return_1d": sec_1d,
-                })
-        ind_1d.sort(key=lambda x: x["rs_1d"], reverse=True)
+        st.subheader("Industry Leaders & Laggards")
+        for period_label, n in _PERIOD_DAYS.items():
+            if len(prices) <= n:
+                continue
+            spy_nd_i = _safe_return(prices["SPY"], n) if "SPY" in prices.columns else 0
+            ind_nd = []
+            for ir in industry_rs:
+                if ir.ticker in prices.columns:
+                    sec_nd = _safe_return(prices[ir.ticker], n)
+                    rs_nd = sec_nd - spy_nd_i
+                    ind_nd.append({
+                        "ticker": ir.ticker, "name": ir.name,
+                        "parent": _SECTOR_NAMES.get(ir.parent_sector, ir.parent_sector),
+                        "rs": rs_nd, "ret": sec_nd,
+                    })
+            ind_nd.sort(key=lambda x: x["rs"], reverse=True)
 
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown("**Top 5 Industries (1d RS)**")
-            for d in ind_1d[:5]:
-                color = "#22c55e"
-                st.markdown(
-                    f"<span style='color:{color}'>▲</span> "
-                    f"**{d['ticker']}** ({d['name']}, {d['parent']}) "
-                    f"{d['rs_1d']:+.2%} RS, {d['return_1d']:+.2%} abs",
-                    unsafe_allow_html=True,
-                )
-        with c2:
-            st.markdown("**Bottom 5 Industries (1d RS)**")
-            for d in ind_1d[-5:]:
-                color = "#ef4444"
-                st.markdown(
-                    f"<span style='color:{color}'>▼</span> "
-                    f"**{d['ticker']}** ({d['name']}, {d['parent']}) "
-                    f"{d['rs_1d']:+.2%} RS, {d['return_1d']:+.2%} abs",
-                    unsafe_allow_html=True,
-                )
+            st.markdown(f"**{period_label}**")
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown(f"**Top 5 ({period_label} RS)**")
+                for d in ind_nd[:5]:
+                    st.markdown(
+                        f"<span style='color:#22c55e'>▲</span> "
+                        f"**{d['ticker']}** ({d['name']}, {d['parent']}) "
+                        f"{d['rs']:+.2%} RS, {d['ret']:+.2%} abs",
+                        unsafe_allow_html=True,
+                    )
+            with c2:
+                st.markdown(f"**Bottom 5 ({period_label} RS)**")
+                for d in ind_nd[-5:]:
+                    st.markdown(
+                        f"<span style='color:#ef4444'>▼</span> "
+                        f"**{d['ticker']}** ({d['name']}, {d['parent']}) "
+                        f"{d['rs']:+.2%} RS, {d['ret']:+.2%} abs",
+                        unsafe_allow_html=True,
+                    )
 
     # ── Key Observations ──────────────────────────────
     st.subheader("System Observations")
@@ -222,6 +254,20 @@ def render_interpretation_panel(result: dict):
     breadth = result.get("breadth")
     if breadth and breadth.signal.value == "DIVERGING":
         observations.append("⚠ Breadth is DIVERGING — narrow market leadership. Rally is fragile.")
+
+    # Gold/Silver ratio cross-reference
+    gs_reading = result.get("gold_silver_reading")
+    if gs_reading is not None:
+        if gs_reading.level.value != "NORMAL":
+            observations.append(
+                f"⚠ Gold/Silver ratio at {gs_reading.ratio_zscore:+.2f}σ ({gs_reading.level.value}) — "
+                f"{gs_reading.description}"
+            )
+        if gs_reading.margin_call_amplifier:
+            observations.append(
+                "🔴 DUAL PRECIOUS METALS STRESS: Gold selling with equities AND silver "
+                "underperforming gold — strongest liquidity-crisis signature."
+            )
 
     if not observations:
         observations.append("No extreme signals detected today. Normal rotation dynamics.")

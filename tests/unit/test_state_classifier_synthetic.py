@@ -5,7 +5,7 @@ Tests every state, every transition, confidence bands, edge cases.
 import pytest
 from engine.schemas import (
     AnalysisState, TransitionPressure, RegimeState,
-    StateClassification, PumpScoreReading,
+    StateClassification, PumpScoreReading, ReversalScoreReading,
 )
 from engine.state_classifier import classify_state, classify_all_sectors
 
@@ -13,9 +13,19 @@ from engine.state_classifier import classify_state, classify_all_sectors
 SETTINGS = {
     "broadening": {"rs_delta_positive_sessions": 5, "min_pump_percentile": 50},
     "overt_pump": {"min_pump_percentile": 75},
+    "distribution": {"pump_delta_negative_sessions": 3},
     "exhaustion": {"pump_delta_nonpositive_sessions": 3},
     "ambiguous": {"conflicting_sessions": 3, "max_duration": 15},
 }
+
+
+def _rev(pctl=50.0, above_75=False):
+    return ReversalScoreReading(
+        ticker="XLK", name="Technology",
+        breadth_det_pillar=50, price_break_pillar=50, crowding_pillar=50,
+        reversal_score=0.3, sub_signals={}, reversal_percentile=pctl,
+        above_75th=above_75,
+    )
 
 
 def _pump(ticker="XLK", name="Technology", score=0.50, delta=0.0, delta_5d=0.0,
@@ -65,7 +75,7 @@ class TestStateAssignment:
             delta_history=[0.02, 0.03, 0.02, 0.03, 0.02, 0.03],
             settings=SETTINGS,
         )
-        assert result.state == AnalysisState.ACCUMULATION
+        assert result.state == AnalysisState.BROADENING
 
     def test_overt_pump(self):
         """Top quartile pump score + top 3 rank + delta positive → Overt Pump."""
@@ -80,7 +90,7 @@ class TestStateAssignment:
         assert result.state == AnalysisState.OVERT_PUMP
 
     def test_exhaustion(self):
-        """Was top quartile + delta negative 3+ sessions → Exhaustion."""
+        """Was top quartile + delta negative 3+ sessions + reversal > 50th → Exhaustion."""
         pump = _pump(score=0.78, delta=-0.03, delta_5d=-0.02)
         prior = _prior(state=AnalysisState.OVERT_PUMP, sessions=10)
         result = classify_state(
@@ -88,11 +98,12 @@ class TestStateAssignment:
             rs_rank=2, pump_percentile=76.0,
             delta_history=[0.01, -0.01, -0.02, -0.03],
             settings=SETTINGS,
+            reversal_score=_rev(pctl=60.0),
         )
         assert result.state == AnalysisState.EXHAUSTION
 
-    def test_rotation(self):
-        """Score declining + rank dropping → Rotation."""
+    def test_distribution(self):
+        """Score declining + rank dropping → Distribution."""
         pump = _pump(score=0.45, delta=-0.06, delta_5d=-0.04)
         prior = _prior(state=AnalysisState.EXHAUSTION, sessions=4)
         result = classify_state(
@@ -101,7 +112,7 @@ class TestStateAssignment:
             delta_history=[-0.04, -0.05, -0.06, -0.06],
             settings=SETTINGS,
         )
-        assert result.state == AnalysisState.OVERT_DUMP
+        assert result.state == AnalysisState.DISTRIBUTION
 
     def test_ambiguous(self):
         """Flip-flopping delta + mid-pack rank → Ambiguous."""
@@ -150,8 +161,7 @@ class TestTransitionPressure:
     def test_down_pressure(self):
         """Delta < 0 for 3+ sessions, state unchanged → DOWN."""
         pump = _pump(score=0.50, delta=-0.03, delta_5d=-0.02)
-        # Prior already EXHAUSTION so state stays the same → no BREAK
-        prior = _prior(state=AnalysisState.EXHAUSTION, sessions=4)
+        prior = _prior(state=AnalysisState.DISTRIBUTION, sessions=4)
         result = classify_state(
             pump=pump, prior=prior, regime=RegimeState.NORMAL,
             rs_rank=3, pump_percentile=50.0,
@@ -420,7 +430,7 @@ class TestMatureHoldLogic:
         assert result.state == AnalysisState.OVERT_PUMP
 
     def test_high_score_negative_delta_is_exhaustion(self):
-        """When delta is actually negative, Exhaustion is correct."""
+        """When delta is actually negative + reversal > 50th, Exhaustion is correct."""
         pump = _pump(score=0.65, delta=-0.02, delta_5d=-0.015)
         prior = _prior(state=AnalysisState.OVERT_PUMP, sessions=15)
         result = classify_state(
@@ -428,6 +438,7 @@ class TestMatureHoldLogic:
             rs_rank=2, pump_percentile=80.0,
             delta_history=[0.01, 0.005, -0.01, -0.02, -0.02],
             settings=SETTINGS,
+            reversal_score=_rev(pctl=60.0),
         )
         assert result.state == AnalysisState.EXHAUSTION
 

@@ -33,6 +33,9 @@ _SIGNAL_SOURCES = {
     "breadth": _SRC_RSP_SPY,
     "credit": _SRC_HYG_LQD,
     "oil": "CL=F via yfinance — live",
+    "correlation": "Cross-sector pairwise correlation (21d rolling) — computed",
+    "gold_silver_ratio": "GLD/SLV via yfinance — live",
+    "gold_divergence": "GLD/SPY/VIX via yfinance — live",
 }
 
 
@@ -110,22 +113,32 @@ def explain_state(
     if state == AnalysisState.OVERT_PUMP:
         parts.append(
             f"Pump score {score:.2f} (top quartile) with delta {delta:+.3f} — "
-            f"strong institutional flow, clear sector leadership."
+            f"maximum acceleration, price/volume/attention confirming."
+        )
+    elif state == AnalysisState.BROADENING:
+        parts.append(
+            f"Pump score {score:.2f} with delta {delta:+.3f} — "
+            f"participation expanding, move becoming visible."
         )
     elif state == AnalysisState.ACCUMULATION:
         parts.append(
             f"Pump score {score:.2f} with delta {delta:+.3f} — "
-            f"momentum building, participation expanding."
+            f"quiet leadership beginning, smart money positioning."
+        )
+    elif state == AnalysisState.DISTRIBUTION:
+        parts.append(
+            f"Pump score {score:.2f} with delta {delta:+.3f} — "
+            f"smart money exiting quietly, deterioration subtle."
         )
     elif state == AnalysisState.EXHAUSTION:
         parts.append(
             f"Pump score {score:.2f} with delta {delta:+.3f} — "
-            f"momentum fading, watch for rotation signal."
+            f"participation contracting, deterioration visible."
         )
     elif state == AnalysisState.OVERT_DUMP:
         parts.append(
             f"Pump score {score:.2f} declining (delta {delta:+.3f}) — "
-            f"active rotation out, capital leaving."
+            f"full capital flight, active liquidation."
         )
     elif state == AnalysisState.AMBIGUOUS:
         parts.append(

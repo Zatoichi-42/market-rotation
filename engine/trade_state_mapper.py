@@ -60,7 +60,32 @@ def map_trade_state(
                       "—", "—", "—", catalyst_note,
                       "Ambiguous — conflicting signals, no edge. Wait for clarity.")
 
-    # ── 4-6. Overt Pump ──
+    # ── 4. Broadening → Long Entry ──
+    if analysis == AnalysisState.BROADENING:
+        if regime == RegimeState.FRAGILE:
+            return _build(ticker, name, analysis, TradeState.WATCHLIST, confidence,
+                          "—", "Regime → NORMAL AND delta still positive",
+                          "0.5x (FRAGILE)", catalyst_note,
+                          f"Broadening but FRAGILE regime. Small long or wait.")
+        return _build(ticker, name, analysis, TradeState.LONG_ENTRY, confidence,
+                      "Close today OR pullback to 20d MA",
+                      "Delta negative 3 sessions OR regime → HOSTILE",
+                      regime_size, catalyst_note,
+                      f"Broadening — participation expanding. Best long entry zone.")
+
+    # ── 5. Distribution → Reduce ──
+    if analysis == AnalysisState.DISTRIBUTION:
+        if regime == RegimeState.FRAGILE:
+            return _build(ticker, name, analysis, TradeState.REDUCE, confidence,
+                          "—", "Delta positive 5+ sessions",
+                          "—", catalyst_note,
+                          "Distribution + FRAGILE. Reduce faster, tighten stops.")
+        return _build(ticker, name, analysis, TradeState.REDUCE, confidence,
+                      "—", "Delta positive 5+ sessions",
+                      "—", catalyst_note,
+                      "Distribution — smart money exiting. Reduce, tighten stops. Do not short yet.")
+
+    # ── 6-8. Overt Pump ──
     if analysis == AnalysisState.OVERT_PUMP:
         if delta > 0.01 and rs_rank <= 3:
             return _build(ticker, name, analysis, TradeState.SELECTIVE_ADD, confidence,

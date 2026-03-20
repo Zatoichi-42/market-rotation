@@ -48,6 +48,7 @@ def render_sector_table(result: dict):
     # ── Main Table with inline sparklines (Feature 2) ─
     from dashboard.components.style_utils import style_dataframe
     from dashboard.components.sparkline import make_sparkline_unicode
+    from engine.arrows import compute_arrow, arrow_symbol
     rev_map = result.get("reversal_map", {})
     rows = []
     for r in rs_readings:
@@ -101,7 +102,12 @@ def render_sector_table(result: dict):
         trade_val = ts.trade_state.value if ts else "—"
         size_val = ts.size_class if ts else "—"
 
-        row.update({"Pump": f"{pump_score:.2f}", "Delta": f"{pump_delta:+.3f}",
+        # Arrow indicator for delta
+        pump_delta_5d = pump.pump_delta_5d_avg if pump else 0.0
+        arrow = compute_arrow(pump_delta, delta_prior=pump_delta_5d, rank_change=r.rs_rank_change)
+        arrow_sym = arrow_symbol(arrow)
+
+        row.update({"Pump": f"{pump_score:.2f}", "Δ": f"{arrow_sym} {pump_delta:+.3f}",
                      "Rev": rev_str, "Rev %ile": rev_pct,
                      "Conc": conc_str,
                      "State": state_val, "Trade": trade_val, "Size": size_val,

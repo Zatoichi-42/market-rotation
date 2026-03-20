@@ -20,7 +20,7 @@ _SECTOR_INDUSTRIES = {
     "XLC": {"name": "Comm Services", "etfs": []},
     "XLY": {"name": "Cons Disc", "etfs": ["XHB", "ITB", "XRT", "IBUY"]},
     "XLP": {"name": "Cons Staples", "etfs": []},
-    "XLB": {"name": "Materials", "etfs": ["XME", "GDX"]},
+    "XLB": {"name": "Materials", "etfs": ["XME", "GDX", "SIL"]},
 }
 
 _ETF_NAMES = {
@@ -29,7 +29,7 @@ _ETF_NAMES = {
     "XOP": "Oil E&P", "OIH": "OilSvc", "URA": "Uranium", "ITA": "A&D", "XAR": "A&D(SPDR)",
     "TAN": "Solar", "NLR": "Nuclear", "VNQ": "REITs",
     "XHB": "Homebuild", "ITB": "HomeCon", "XRT": "Retail", "IBUY": "eRetail",
-    "XME": "Metals", "GDX": "Gold",
+    "XME": "Metals", "GDX": "Gold", "SIL": "Silver",
     "XLK": "Tech", "XLV": "Health", "XLF": "Fins", "XLE": "Energy",
     "XLI": "Indust", "XLU": "Utils", "XLRE": "RealEst", "XLC": "CommSvc",
     "XLY": "ConDisc", "XLP": "ConStap", "XLB": "Materials",
@@ -44,6 +44,7 @@ _INDUSTRY_HOLDINGS = {
     "GDX": {"name": "Gold Miners", "stocks": {"NEM": "Newmont", "GOLD": "Barrick", "AEM": "AgnicoEagle", "FNV": "FrancoNev", "WPM": "Wheaton"}},
     "XHB": {"name": "Homebuilders", "stocks": {"DHI": "DRHorton", "LEN": "Lennar", "NVR": "NVR", "PHM": "PulteGrp", "TOL": "TollBros"}},
     "OIH": {"name": "Oil Services", "stocks": {"SLB": "Schlumbrg", "HAL": "Halliburtn", "BKR": "BakerHugh"}},
+    "SIL": {"name": "Silver Miners", "stocks": {"PAAS": "PanAmer", "HL": "HeclaMin", "AG": "FirstMaj", "MAG": "MAGSilver", "CDE": "CoeurMin"}},
 }
 
 

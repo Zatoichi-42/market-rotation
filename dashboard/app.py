@@ -88,8 +88,50 @@ def run_pipeline():
         if len(oil_series) > 60:
             oil_z = compute_zscore(oil_series.iloc[-1], oil_series)
 
+    # Cross-sector correlation (signal #6)
+    from engine.correlation import compute_cross_sector_correlation
+    corr_settings = settings.get("correlation", {})
+    corr_reading = compute_cross_sector_correlation(
+        prices,
+        window=corr_settings.get("window", 21),
+        zscore_window=corr_settings.get("zscore_window", 504),
+        fragile_zscore=corr_settings.get("fragile_zscore", 0.5),
+        hostile_zscore=corr_settings.get("hostile_zscore", 1.5),
+        absolute_hostile=corr_settings.get("absolute_hostile", 0.80),
+    )
+    corr_z = corr_reading.avg_corr_zscore if corr_reading else float("nan")
+
+    # Gold/VIX divergence modifier
+    from engine.gold_divergence import compute_gold_vix_divergence
+    modifiers = universe.get("market_modifiers", {})
+    gld_ticker = modifiers.get("gold", "GLD")
+    slv_ticker = modifiers.get("silver", "SLV")
+    gd_settings = settings.get("gold_divergence", {})
+    gd_reading = None
+    if gld_ticker in prices.columns and "SPY" in prices.columns:
+        gd_reading = compute_gold_vix_divergence(
+            prices[gld_ticker], prices["SPY"], vix_val,
+            gold_decline_threshold=gd_settings.get("gold_decline_threshold", -0.02),
+            spy_decline_threshold=gd_settings.get("spy_decline_threshold", -0.02),
+            vix_threshold=gd_settings.get("vix_threshold", 25),
+        )
+
+    # Gold/Silver ratio modifier
+    from engine.gold_silver_ratio import compute_gold_silver_ratio
+    gs_reading = None
+    if gld_ticker in prices.columns and slv_ticker in prices.columns:
+        gs_window = settings.get("gold_silver_ratio", {}).get("zscore_window", 504)
+        gs_reading = compute_gold_silver_ratio(
+            prices[gld_ticker], prices[slv_ticker],
+            window=gs_window,
+            gold_vix_divergence_active=(gd_reading.is_margin_call_regime if gd_reading else False),
+        )
+
     regime = classify_regime_from_data(vix_val, vix3m_val, bz, credit_z, settings["regime"],
-                                       fred_hy_oas_value=fred_oas_bps, oil_zscore=oil_z)
+                                       fred_hy_oas_value=fred_oas_bps, oil_zscore=oil_z,
+                                       correlation_zscore=corr_z,
+                                       gold_silver_reading=gs_reading,
+                                       gold_divergence_reading=gd_reading)
 
     # Catalyst Gate (between regime and state classifier)
     catalysts = load_catalyst_calendar()
@@ -301,6 +343,9 @@ def run_pipeline():
         "industry_states": industry_states,
         "reversal_scores": reversal_readings,
         "reversal_map": reversal_map,
+        "gold_silver_reading": gs_reading,
+        "gold_divergence_reading": gd_reading,
+        "correlation_reading": corr_reading,
     }
 
 

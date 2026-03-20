@@ -141,6 +141,48 @@ def render_regime_panel(result: dict):
             unsafe_allow_html=True,
         )
 
+    # ── Gold/Silver Ratio Modifier ────────────────────
+    gs_reading = result.get("gold_silver_reading")
+    if gs_reading is not None:
+        gs_level_colors = {
+            SignalLevel.NORMAL: "#00d4aa",
+            SignalLevel.FRAGILE: "#ffa500",
+            SignalLevel.HOSTILE: "#ff4444",
+        }
+        gs_color = gs_level_colors.get(gs_reading.level, "#888")
+        gs_label = gs_reading.level.value
+        amp_badge = ""
+        if gs_reading.margin_call_amplifier:
+            amp_badge = (" <span style='background:#ff4444;color:black;padding:2px 6px;"
+                         "border-radius:3px;font-size:0.8em;font-weight:bold;'>DUAL STRESS</span>")
+        st.markdown(
+            f"<div style='padding:8px;background:rgba(0,0,0,0.2);border-radius:6px;margin-bottom:12px;'>"
+            f"<b>Modifier: Gold/Silver Ratio</b> — "
+            f"<span style='color:{gs_color};font-weight:bold;'>{gs_label}</span>"
+            f" ({gs_reading.ratio_zscore:+.2f}σ){amp_badge}<br>"
+            f"<span style='font-size:0.9em;'>{gs_reading.description}</span>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+    # ── Gold/VIX Divergence Modifier ───────────────────
+    gd_reading = result.get("gold_divergence_reading")
+    if gd_reading is not None and gd_reading.level != SignalLevel.NORMAL:
+        gd_color = _SIGNAL_COLORS.get(gd_reading.level, "#888")
+        gd_label = gd_reading.level.value
+        st.markdown(
+            f"<div style='padding:8px;background:rgba(0,0,0,0.2);border-radius:6px;margin-bottom:12px;'>"
+            f"<b>Modifier: Gold/VIX Divergence</b> — "
+            f"<span style='color:{gd_color};font-weight:bold;'>{gd_label}</span><br>"
+            f"<span style='font-size:0.9em;'>{gd_reading.description}</span>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+    # ── Causal Chain ────────────────────────────────────
+    from dashboard.components.chain import render_causal_chain
+    render_causal_chain(result)
+
     # ── Signal breakdown with glossary popovers ───────
     st.subheader("Signal Breakdown")
     cols = st.columns(len(regime.signals))

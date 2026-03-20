@@ -43,23 +43,23 @@ def _rev(score=0.65, pct=82.0, above=True):
 
 class TestReversalScoreIntegration:
 
-    def test_exhaustion_to_rotation_with_high_reversal(self):
-        """Exhaustion + Reversal > 75th pctl → Rotation."""
-        pump = _pump(score=0.75, delta=-0.03)
+    def test_exhaustion_to_overt_dump_with_high_reversal_bottom_rank(self):
+        """Exhaustion + Reversal > 75th pctl + bottom rank → Overt Dump."""
+        pump = _pump(score=0.35, delta=-0.03)
         prior = _prior(state=AnalysisState.EXHAUSTION, sessions=5)
         rev = _rev(score=0.70, pct=85.0, above=True)
         result = classify_state(
             pump=pump, prior=prior, regime=RegimeState.NORMAL,
-            rs_rank=3, pump_percentile=70.0,
+            rs_rank=10, pump_percentile=30.0,
             delta_history=[-0.02, -0.03, -0.03, -0.03],
             settings=SETTINGS, reversal_score=rev,
         )
         assert result.state == AnalysisState.OVERT_DUMP
 
-    def test_exhaustion_stays_without_high_reversal(self):
-        """Exhaustion + Reversal < 75th pctl → stays Exhaustion."""
+    def test_low_reversal_negative_delta_is_distribution(self):
+        """Negative delta + Reversal < 50th pctl → Distribution (not Exhaustion)."""
         pump = _pump(score=0.75, delta=-0.03)
-        prior = _prior(state=AnalysisState.EXHAUSTION, sessions=5)
+        prior = _prior(state=AnalysisState.OVERT_PUMP, sessions=5)
         rev = _rev(score=0.20, pct=30.0, above=False)
         result = classify_state(
             pump=pump, prior=prior, regime=RegimeState.NORMAL,
@@ -67,7 +67,7 @@ class TestReversalScoreIntegration:
             delta_history=[-0.02, -0.03, -0.03, -0.03],
             settings=SETTINGS, reversal_score=rev,
         )
-        assert result.state == AnalysisState.EXHAUSTION
+        assert result.state == AnalysisState.DISTRIBUTION
 
     def test_conflicting_pump_reversal_reduces_confidence(self):
         """Pump rising BUT Reversal high → lower confidence than aligned."""

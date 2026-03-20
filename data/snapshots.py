@@ -244,11 +244,11 @@ def _dict_to_pump(d: dict) -> PumpScoreReading:
     return PumpScoreReading(**d)
 
 
-# Backward compat: map old state names from Phase 1/2 snapshots to new 5-state model
+# Backward compat: map old state names to 7-state model
 _STATE_MIGRATION = {
-    "Broadening": "Accumulation",
-    "Exhaustion": "Exhaustion",
-    "Rotation/Reversal": "Overt Dump",
+    "Rotation/Reversal": "Distribution",
+    "Rotation": "Distribution",
+    "Reversal": "Distribution",
 }
 
 

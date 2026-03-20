@@ -2,13 +2,17 @@
 Regime Gate — Layer 1 of the Pump Rotation System.
 
 Classifies the current market regime as NORMAL, FRAGILE, or HOSTILE
-based on 4 signals: VIX level, VIX term structure, breadth z-score, credit z-score.
+based on 6 signals: VIX, term structure, breadth, credit, oil, correlation.
 
 Gate aggregation logic:
 - >= hostile_threshold (default 2) HOSTILE signals → HOSTILE
 - Any HOSTILE signal OR >= 2 FRAGILE signals → FRAGILE
 - 1 FRAGILE + rest NORMAL → NORMAL
 - All NORMAL → NORMAL
+
+Modifiers (applied AFTER gate, can only tighten):
+  A. Gold/VIX Divergence
+  B. Gold/Silver Ratio
 """
 import math
 from datetime import datetime, timezone
@@ -93,6 +97,21 @@ def classify_signal(signal_name: str, value: float, thresholds: dict) -> RegimeS
             level = SignalLevel.NORMAL
             desc = f"Oil z-score {value:.2f} (normal range)"
 
+    elif signal_name == "correlation":
+        # Cross-sector correlation: high = diversification breakdown
+        corr_cfg = thresholds.get("correlation", {})
+        hostile_z = corr_cfg.get("hostile_zscore", 1.5)
+        fragile_z = corr_cfg.get("fragile_zscore", 0.5)
+        if value >= hostile_z:
+            level = SignalLevel.HOSTILE
+            desc = f"Correlation z-score {value:.2f} (sectors in lockstep, ≥{hostile_z}σ)"
+        elif value >= fragile_z:
+            level = SignalLevel.FRAGILE
+            desc = f"Correlation z-score {value:.2f} (rising, ≥{fragile_z}σ)"
+        else:
+            level = SignalLevel.NORMAL
+            desc = f"Correlation z-score {value:.2f} (healthy dispersion)"
+
     else:
         raise ValueError(f"Unknown signal name: {signal_name}")
 
@@ -161,10 +180,16 @@ def classify_regime_from_data(
     thresholds: dict,
     fred_hy_oas_value: float | None = None,
     oil_zscore: float = float("nan"),
+    correlation_zscore: float = float("nan"),
+    gold_silver_reading=None,
+    gold_divergence_reading=None,
 ) -> RegimeAssessment:
     """
     Convenience function: classify regime from raw values.
     Handles NaN gracefully by excluding those signals.
+
+    6 signals: VIX, term structure, breadth, credit, oil, correlation.
+    Modifiers applied after: gold/VIX divergence, gold/silver ratio.
     """
     signal_inputs = [
         ("vix", vix_current),
@@ -172,6 +197,7 @@ def classify_regime_from_data(
         ("breadth", breadth_zscore),
         ("credit", credit_zscore),
         ("oil", oil_zscore),
+        ("correlation", correlation_zscore),
     ]
 
     signals = []
@@ -180,6 +206,36 @@ def classify_regime_from_data(
         if sig is not None:
             signals.append(sig)
 
-    return classify_regime(signals, thresholds, fred_hy_oas_value=fred_hy_oas_value)
+    assessment = classify_regime(signals, thresholds, fred_hy_oas_value=fred_hy_oas_value)
+
+    # Determine if gold/VIX divergence is active
+    gold_vix_divergence_active = False
+    if gold_divergence_reading is not None:
+        gold_vix_divergence_active = gold_divergence_reading.is_margin_call_regime
+
+    # Apply gold/VIX divergence modifier (can only tighten)
+    if gold_divergence_reading is not None:
+        from engine.gold_divergence import apply_gold_divergence_modifier
+        new_state, mod_exp = apply_gold_divergence_modifier(
+            assessment.state, gold_divergence_reading,
+        )
+        if new_state != assessment.state:
+            assessment.state = new_state
+        if mod_exp:
+            assessment.explanation += f" [Modifier: {mod_exp}]"
+
+    # Apply gold/silver ratio modifier (can only tighten)
+    if gold_silver_reading is not None:
+        from engine.gold_silver_ratio import apply_gold_silver_modifier
+        new_state, mod_exp = apply_gold_silver_modifier(
+            assessment.state, gold_silver_reading,
+            gold_vix_divergence_active=gold_vix_divergence_active,
+        )
+        if new_state != assessment.state:
+            assessment.state = new_state
+        if mod_exp:
+            assessment.explanation += f" [Modifier: {mod_exp}]"
+
+    return assessment
 
 

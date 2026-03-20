@@ -23,11 +23,13 @@ class SignalLevel(Enum):
 
 
 class AnalysisState(Enum):
-    OVERT_DUMP = "Overt Dump"        # Deep red — active rotation out
-    EXHAUSTION = "Exhaustion"         # Light red — momentum fading
-    AMBIGUOUS = "Ambiguous"           # No color — conflicting signals
-    ACCUMULATION = "Accumulation"     # Light green — momentum building
-    OVERT_PUMP = "Overt Pump"        # Deep green — strongest inflow
+    OVERT_DUMP = "Overt Dump"        # Deep red — full capital flight
+    EXHAUSTION = "Exhaustion"         # Red — participation contracting
+    DISTRIBUTION = "Distribution"     # Light salmon — smart money exiting quietly
+    AMBIGUOUS = "Ambiguous"           # Gray — conflicting signals
+    ACCUMULATION = "Accumulation"     # Light green — smart money entering quietly
+    BROADENING = "Broadening"         # Green — participation expanding
+    OVERT_PUMP = "Overt Pump"        # Deep green — maximum acceleration
 
 
 class TradeState(Enum):
@@ -353,3 +355,62 @@ class DailySnapshot:
     # Gap fix additions
     catalyst: Optional[CatalystAssessment] = None
     concentration: list = field(default_factory=list)
+
+
+# ── Gold/Silver Ratio Modifier ──────────────────────
+
+@dataclass
+class GoldSilverRatioReading:
+    """Gold/silver ratio regime modifier output."""
+    ratio: float                      # Current GLD/SLV ratio
+    ratio_zscore: float               # Z-score vs 2-year history
+    level: SignalLevel                # NORMAL / FRAGILE / HOSTILE
+    gold_5d_return: float
+    silver_5d_return: float
+    silver_underperforming: bool      # True if silver falling harder than gold
+    margin_call_amplifier: bool       # True if gold/VIX divergence active AND silver weaker
+    description: str
+
+
+# ── Arrow Indicators ────────────────────────────────
+
+class ArrowDirection(Enum):
+    STRONG_UP = "↑↑"
+    UP = "↑"
+    SLIGHT_UP = "↗"
+    FLAT = "→"
+    SLIGHT_DOWN = "↘"
+    DOWN = "↓"
+    STRONG_DOWN = "↓↓"
+
+
+@dataclass
+class ArrowIndicator:
+    direction: ArrowDirection
+    color_hex: str
+    label: str
+    is_counter_trend: bool = False
+
+
+# ── Cross-Sector Correlation ────────────────────────
+
+@dataclass
+class CorrelationReading:
+    avg_correlation: float
+    avg_corr_zscore: float
+    level: SignalLevel
+    max_corr_pair: tuple
+    min_corr_pair: tuple
+    description: str
+
+
+# ── Gold/VIX Divergence ────────────────────────────
+
+@dataclass
+class GoldDivergenceReading:
+    gold_5d_return: float
+    spy_5d_return: float
+    vix_level: float
+    is_margin_call_regime: bool
+    level: SignalLevel
+    description: str

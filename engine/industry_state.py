@@ -36,19 +36,24 @@ def classify_industry_state(
     # Count positive/negative timeframes
     tf_pos = sum(1 for v in [rs_5d, rs_20d, rs_60d] if v > 0.001)
     tf_neg = sum(1 for v in [rs_5d, rs_20d, rs_60d] if v < -0.001)
+    all_rs_neg = tf_neg == 3
 
-    # Determine state from RS pattern
+    # Determine state from RS pattern (7-state)
     if tf_pos >= 2 and slope > 0.001 and rank <= 5 and composite >= 70:
         state = AnalysisState.OVERT_PUMP
+    elif tf_pos >= 2 and slope > 0.001:
+        state = AnalysisState.BROADENING
     elif slope > 0.001 or rs_5d > 0.001:
         state = AnalysisState.ACCUMULATION
     elif rs_60d > 0.005 and (slope < -0.001 or rs_5d < -0.001):
         # Was strong (60d positive) but short-term weakening
         state = AnalysisState.EXHAUSTION
-    elif tf_neg >= 2 and slope < -0.001 and rank >= 15:
+    elif all_rs_neg and slope < -0.001 and rank >= 15:
         state = AnalysisState.OVERT_DUMP
-    elif tf_neg >= 2 and slope < -0.001:
+    elif tf_neg >= 2 and slope < -0.001 and rs_60d > 0.001:
         state = AnalysisState.EXHAUSTION
+    elif tf_neg >= 2 and slope < -0.001:
+        state = AnalysisState.DISTRIBUTION
     elif tf_pos >= 1 and tf_neg >= 1:
         state = AnalysisState.AMBIGUOUS
     else:

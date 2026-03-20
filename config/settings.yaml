@@ -83,18 +83,41 @@ turnover:
     - "Overt Dump"
     - "Ambiguous"
 
-# State classifier
+# State classifier (7-state symmetric architecture)
 state:
   broadening:
     rs_delta_positive_sessions: 5
     min_pump_percentile: 50
   overt_pump:
     min_pump_percentile: 75
+    min_confidence: 40
+  distribution:
+    pump_delta_negative_sessions: 3
   exhaustion:
     pump_delta_nonpositive_sessions: 3
+    requires_prior_high: true
+    prior_high_lookback: 20
+  overt_dump:
+    all_rs_negative: true
+    pump_delta_negative_sessions: 5
+    min_reversal_percentile: 75
+    min_rank_bottom_pct: 0.25
+    min_confidence: 40
   ambiguous:
     conflicting_sessions: 3
     max_duration: 15
+  veto:
+    reversal_pctl_bullish_block: 90
+    reversal_pctl_ambiguous_force: 75
+    min_confidence_for_directional: 25
+  confidence_floors:
+    overt_pump: 40
+    overt_dump: 40
+    broadening: 35
+    exhaustion: 35
+    accumulation: 25
+    distribution: 25
+    ambiguous: 10
 
 # Catalyst Gate (Gap Fix 1)
 catalyst:
@@ -110,6 +133,30 @@ catalyst:
   shock_pause_threshold: 2.0
   # Shock magnitude that also forces regime recheck
   shock_regime_recheck_threshold: 3.0
+
+# Cross-sector correlation
+correlation:
+  window: 21
+  zscore_window: 504
+  fragile_zscore: 0.5
+  hostile_zscore: 1.5
+  absolute_hostile: 0.80
+
+# Gold/VIX divergence (margin-call detector)
+gold_divergence:
+  gold_decline_threshold: -0.02
+  spy_decline_threshold: -0.02
+  vix_threshold: 25
+
+# Arrow indicators
+arrows:
+  flat_threshold: 0.005
+
+# Gold/Silver Ratio (regime modifier)
+gold_silver_ratio:
+  zscore_window: 504
+  fragile_zscore: 1.0
+  hostile_zscore: 2.0
 
 # Concentration Monitor (Gap Fix 4)
 concentration:

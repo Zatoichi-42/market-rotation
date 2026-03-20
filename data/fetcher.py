@@ -24,7 +24,7 @@ _MARKET_TICKERS = ["SPY", "RSP", "HYG", "LQD", "QQQ", "IWM", "DIA"]
 _INDUSTRY_TICKERS = [
     "SMH", "IGV", "HACK", "SOXX", "XBI", "IHI", "KRE", "IAI", "KIE",
     "XOP", "OIH", "URA", "ITA", "XAR", "XHB", "ITB", "XRT", "IBUY",
-    "XME", "GDX", "VNQ", "TAN", "NLR",
+    "XME", "GDX", "SIL", "VNQ", "TAN", "NLR",
 ]
 _VIX_TICKERS = ["^VIX", "^VIX3M"]
 
@@ -53,7 +53,9 @@ def fetch_all(config: dict, force_refresh: bool = False) -> dict:
         leader_tickers.extend(leaders)
     # Commodity tickers for regime enhancement
     commodity_tickers = list(config.get("commodities", {}).values())
-    all_tickers = _MARKET_TICKERS + _SECTOR_TICKERS + industry_tickers + leader_tickers + commodity_tickers
+    # Market modifier tickers (GLD, SLV for gold/silver ratio)
+    modifier_tickers = list(config.get("market_modifiers", {}).values())
+    all_tickers = _MARKET_TICKERS + _SECTOR_TICKERS + industry_tickers + leader_tickers + commodity_tickers + modifier_tickers
     # Deduplicate while preserving order
     seen = set()
     all_tickers = [t for t in all_tickers if not (t in seen or seen.add(t))]
