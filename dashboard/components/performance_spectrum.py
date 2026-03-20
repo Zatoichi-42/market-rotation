@@ -40,11 +40,11 @@ _INDUSTRY_HOLDINGS = {
     "IGV": {"name": "Software", "stocks": {"CRM": "Salesforce", "ADBE": "Adobe", "NOW": "ServiceNow", "INTU": "Intuit", "PANW": "PaloAlto", "SNPS": "Synopsys", "CDNS": "Cadence", "WDAY": "Workday"}},
     "XBI": {"name": "Biotech", "stocks": {"VRTX": "Vertex", "REGN": "Regeneron", "MRNA": "Moderna", "BIIB": "Biogen", "ALNY": "Alnylam", "BMRN": "BioMarin"}},
     "KRE": {"name": "Regional Banks", "stocks": {"CFG": "Citizens", "RF": "Regions", "HBAN": "Huntington", "KEY": "KeyCorp", "ZION": "Zions", "CMA": "Comerica"}},
-    "XOP": {"name": "Oil & Gas E&P", "stocks": {"COP": "Conoco", "EOG": "EOG", "DVN": "Devon", "FANG": "Diamondback", "MRO": "Marathon", "OVV": "Ovintiv"}},
+    "XOP": {"name": "Oil & Gas E&P", "stocks": {"COP": "Conoco", "EOG": "EOG", "DVN": "Devon", "FANG": "Diamondback", "MTDR": "Matador", "OVV": "Ovintiv"}},
     "GDX": {"name": "Gold Miners", "stocks": {"NEM": "Newmont", "GOLD": "Barrick", "AEM": "AgnicoEagle", "FNV": "FrancoNev", "WPM": "Wheaton"}},
     "XHB": {"name": "Homebuilders", "stocks": {"DHI": "DRHorton", "LEN": "Lennar", "NVR": "NVR", "PHM": "PulteGrp", "TOL": "TollBros"}},
     "OIH": {"name": "Oil Services", "stocks": {"SLB": "Schlumbrg", "HAL": "Halliburtn", "BKR": "BakerHugh"}},
-    "SIL": {"name": "Silver Miners", "stocks": {"PAAS": "PanAmer", "HL": "HeclaMin", "AG": "FirstMaj", "MAG": "MAGSilver", "CDE": "CoeurMin"}},
+    "SIL": {"name": "Silver Miners", "stocks": {"PAAS": "PanAmer", "HL": "HeclaMin", "AG": "FirstMaj", "WPM": "WheatonPM", "CDE": "CoeurMin"}},
 }
 
 
