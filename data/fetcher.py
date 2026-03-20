@@ -98,7 +98,9 @@ def fetch_all(config: dict, force_refresh: bool = False) -> dict:
         "vix": vix,
         "vix3m": vix3m,
         "credit": credit,
-        "fred_hy_oas": fred_data,
+        "fred_hy_oas": fred_data.get("hy_oas") if isinstance(fred_data, dict) else fred_data,
+        "fred_put_call": fred_data.get("put_call_ratio") if isinstance(fred_data, dict) else None,
+        "fred_all": fred_data,
         "metadata": metadata,
     }
 
@@ -241,23 +243,31 @@ def _overlay_live_vix(
     return vix, vix3m
 
 
-def _fetch_fred_safe(config: dict) -> pd.DataFrame | None:
-    """Fetch FRED HY OAS data. Returns None on any failure."""
+def _fetch_fred_safe(config: dict) -> dict | None:
+    """Fetch all FRED series from config. Returns dict of DataFrames or None."""
     api_key = os.getenv("FRED_API_KEY")
     if not api_key or api_key == "your_key_here":
         logger.info("FRED API key not configured — skipping FRED data")
         return None
 
     fred_config = config.get("fred", {})
-    series_id = fred_config.get("hy_oas", "BAMLH0A0HYM2")
+    if not fred_config:
+        return None
 
     try:
         from fredapi import Fred
-        fred = Fred(api_key=api_key)
-        data = fred.get_series(series_id)
-        if data is not None and not data.empty:
-            return data.to_frame(name="hy_oas")
+        fred_client = Fred(api_key=api_key)
     except Exception as e:
-        logger.warning(f"FRED fetch failed: {e}")
+        logger.warning(f"FRED init failed: {e}")
+        return None
 
-    return None
+    results = {}
+    for name, series_id in fred_config.items():
+        try:
+            data = fred_client.get_series(series_id)
+            if data is not None and not data.empty:
+                results[name] = data.to_frame(name=name)
+        except Exception as e:
+            logger.warning(f"FRED fetch failed for {name} ({series_id}): {e}")
+
+    return results if results else None

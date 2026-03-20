@@ -165,6 +165,7 @@ industries:
 # FRED series IDs
 fred:
   hy_oas: "BAMLH0A0HYM2"
+  # put_call_ratio: not available on FRED — add from CBOE/Finnhub in future phase
 
 # Commodity tickers for regime gate enhancement
 commodities:
