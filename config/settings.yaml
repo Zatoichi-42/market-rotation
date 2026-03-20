@@ -7,9 +7,9 @@ data:
 
 # RS computation windows
 rs:
-  windows: [5, 20, 60]
+  windows: [2, 5, 10, 20, 60, 120]
   slope_window: 5
-  composite_weights:         # 5d / 20d / 60d
+  composite_weights:         # Only 5d / 20d / 60d enter composite
     5: 0.20
     20: 0.50
     60: 0.30

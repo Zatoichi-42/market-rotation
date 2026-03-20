@@ -107,19 +107,21 @@ def compute_rs_readings(
         else:
             rank_changes[ticker] = 0
 
-    # Compute composite score: weighted percentile rank across windows
-    # For each window, percentile-rank the RS values, then weighted average
+    # Compute composite score: weighted percentile rank across COMPOSITE windows only
+    # Only windows with composite weights contribute (5d/20d/60d)
     composite_scores = {}
     pct_by_window = {}
-    for w in windows:
-        rs_vals = pd.Series({t: latest_rs[w].get(t, np.nan) for t in tickers})
-        pct_by_window[w] = percentile_rank(rs_vals.dropna())
+    composite_windows = list(composite_weights.keys())
+    for w in composite_windows:
+        if w in latest_rs:
+            rs_vals = pd.Series({t: latest_rs[w].get(t, np.nan) for t in tickers})
+            pct_by_window[w] = percentile_rank(rs_vals.dropna())
 
     for ticker in tickers:
         weighted_sum = 0.0
         weight_sum = 0.0
-        for w in windows:
-            if ticker in pct_by_window[w] and not np.isnan(pct_by_window[w][ticker]):
+        for w in composite_windows:
+            if w in pct_by_window and ticker in pct_by_window[w] and not np.isnan(pct_by_window[w][ticker]):
                 weighted_sum += composite_weights[w] * pct_by_window[w][ticker]
                 weight_sum += composite_weights[w]
         if weight_sum > 0:
@@ -130,28 +132,30 @@ def compute_rs_readings(
     # Build RSReading objects
     readings = []
     for ticker in tickers:
-        rs_5d = latest_rs.get(5, {}).get(ticker, np.nan)
-        rs_20d = latest_rs.get(20, {}).get(ticker, np.nan)
-        rs_60d = latest_rs.get(60, {}).get(ticker, np.nan)
+        rs_vals = {}
+        for w in windows:
+            v = latest_rs.get(w, {}).get(ticker, np.nan)
+            rs_vals[w] = 0.0 if np.isnan(v) else v
 
-        # If a window RS is NaN (insufficient data), use 0.0
-        if np.isnan(rs_5d):
-            rs_5d = 0.0
-        if np.isnan(rs_20d):
-            rs_20d = 0.0
-        if np.isnan(rs_60d):
-            rs_60d = 0.0
+        # Extended windows: use NaN if insufficient data, else 0.0
+        rs_2d = rs_vals.get(2, float('nan') if 2 in windows and len(prices) < 3 else rs_vals.get(2, 0.0))
+        rs_10d = rs_vals.get(10, float('nan') if 10 in windows and len(prices) < 11 else rs_vals.get(10, 0.0))
+        rs_120d_raw = latest_rs.get(120, {}).get(ticker, np.nan)
+        rs_120d = float('nan') if (120 in windows and np.isnan(rs_120d_raw)) else (0.0 if 120 not in windows else rs_120d_raw)
 
         readings.append(RSReading(
             ticker=ticker,
             name=sector_names[ticker],
-            rs_5d=rs_5d,
-            rs_20d=rs_20d,
-            rs_60d=rs_60d,
+            rs_5d=rs_vals.get(5, 0.0),
+            rs_20d=rs_vals.get(20, 0.0),
+            rs_60d=rs_vals.get(60, 0.0),
             rs_slope=slopes[ticker],
             rs_rank=current_ranks[ticker],
             rs_rank_change=rank_changes[ticker],
             rs_composite=composite_scores[ticker],
+            rs_2d=rs_2d if not np.isnan(rs_2d) else 0.0,
+            rs_10d=rs_10d if not np.isnan(rs_10d) else 0.0,
+            rs_120d=rs_120d if not np.isnan(rs_120d) else 0.0,
         ))
 
     return readings

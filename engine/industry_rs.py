@@ -177,6 +177,12 @@ def compute_industry_rs(
             rs_rank=current_ranks[t],
             rs_rank_change=rank_changes[t],
             rs_rank_within_sector=within_sector_ranks[t],
+            rs_2d=rs_vs_spy.get(2, {}).get(t, 0.0),
+            rs_10d=rs_vs_spy.get(10, {}).get(t, 0.0),
+            rs_120d=rs_vs_spy.get(120, {}).get(t, 0.0),
+            rs_2d_vs_parent=rs_vs_parent.get(2, {}).get(t, 0.0),
+            rs_10d_vs_parent=rs_vs_parent.get(10, {}).get(t, 0.0),
+            rs_120d_vs_parent=rs_vs_parent.get(120, {}).get(t, 0.0),
         ))
 
     return readings

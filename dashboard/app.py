@@ -397,6 +397,66 @@ def run_pipeline():
         regime_character=regime_char_reading.character,
     )
 
+    # Trade Journal (Phase 4b) — generate calls, fill forward returns
+    from engine.trade_journal import (
+        load_journal, generate_calls, update_forward_returns,
+        close_calls, compute_journal_summary, save_journal,
+    )
+    journal_calls, _ = load_journal()
+
+    # Build RS lookup for journal
+    rs_lookup = {}
+    for r in rs_readings:
+        rs_lookup[r.ticker] = r
+
+    # Load prior targets from existing open calls
+    prior_targets = {}
+    for c in journal_calls:
+        if (c.status if hasattr(c, 'status') else c.get("status", "")) == "open":
+            t = c.ticker if hasattr(c, 'ticker') else c.get("ticker", "")
+            prior_targets[t] = c.target_pct if hasattr(c, 'target_pct') else c.get("target_pct", 0)
+
+    # Only generate calls for sectors (not industries) to keep journal focused
+    sector_trade_states = {t: ts for t, ts in trade_states.items() if t in SECTOR_NAMES}
+    current_date = prices.index[-1].strftime("%Y-%m-%d")
+
+    market_data = {
+        "prices": prices,
+        "regime_gate": regime.state.value,
+        "regime_character": regime_char_reading.character.value,
+        "horizon_readings": horizon_readings,
+        "pumps": pumps,
+        "reversal_map": reversal_map,
+        "rs_readings": rs_readings,
+        "current_date": current_date,
+    }
+
+    new_calls = generate_calls(
+        current_states=sector_trade_states,
+        prior_targets=prior_targets,
+        market_data=market_data,
+        existing_open_calls=[c for c in journal_calls
+                             if (c.status if hasattr(c, 'status') else c.get("status", "")) == "open"],
+    )
+    journal_calls.extend(new_calls)
+
+    # Fill forward returns
+    spy_prices = prices["SPY"] if "SPY" in prices.columns else None
+    if spy_prices is not None:
+        journal_calls = update_forward_returns(journal_calls, prices, spy_prices, current_date)
+
+    # Close expired/reversed calls
+    journal_calls = close_calls(journal_calls, sector_trade_states, regime.state.value, current_date)
+
+    # Compute summary
+    journal_summary = compute_journal_summary(journal_calls)
+
+    # Save
+    try:
+        save_journal(journal_calls, journal_summary)
+    except Exception:
+        pass  # Don't crash dashboard on journal save failure
+
     return {
         "regime": regime,
         "rs_readings": rs_readings,
@@ -424,6 +484,8 @@ def run_pipeline():
         "correlation_reading": corr_reading,
         "horizon_readings": horizon_readings,
         "regime_character": regime_char_reading,
+        "journal_calls": journal_calls,
+        "journal_summary": journal_summary,
     }
 
 
@@ -443,9 +505,9 @@ def main():
     )
 
     # Tab layout
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
         "Regime Gate", "Sector Rankings", "Industries", "Breadth",
-        "Today", "Signal Reliability", "Replay", "Debug",
+        "Today", "Journal", "Signal Reliability", "Replay", "Debug",
     ])
 
     with tab1:
@@ -479,14 +541,18 @@ def main():
         render_interpretation_panel(result)
 
     with tab6:
+        from dashboard.components.journal import render_journal_panel
+        render_journal_panel(result)
+
+    with tab7:
         from dashboard.components.signal_reliability import render_signal_reliability
         render_signal_reliability(result)
 
-    with tab7:
+    with tab8:
         from dashboard.components.replay_panel import render_replay_panel
         render_replay_panel(result)
 
-    with tab8:
+    with tab9:
         from dashboard.components.debug_panel import render_debug_panel
         render_debug_panel(result)
 

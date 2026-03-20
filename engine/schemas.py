@@ -131,6 +131,10 @@ class RSReading:
     rs_rank: int
     rs_rank_change: int
     rs_composite: float
+    # Extended horizons (Phase 4b — defaults for backward compat)
+    rs_2d: float = 0.0
+    rs_10d: float = 0.0
+    rs_120d: float = 0.0
 
 
 # ── Breadth ────────────────────────────────────────────
@@ -203,6 +207,14 @@ class IndustryRSReading:
     rs_rank: int
     rs_rank_change: int
     rs_rank_within_sector: int
+
+    # Extended horizons (Phase 4b — defaults for backward compat)
+    rs_2d: float = 0.0
+    rs_10d: float = 0.0
+    rs_120d: float = 0.0
+    rs_2d_vs_parent: float = 0.0
+    rs_10d_vs_parent: float = 0.0
+    rs_120d_vs_parent: float = 0.0
 
 
 # ── Reversal Score (Phase 2) ──────────────────────────
@@ -579,3 +591,108 @@ class PositionExitRecord:
     entry_reversal_score: float
     exit_reversal_score: float
     lesson_tags: list[str]
+
+
+# ── Trade Journal (Phase 4b) ─────────────────────
+
+@dataclass
+class TradeCall:
+    call_id: str                      # "CALL-{TICKER}-{DATE}-{SEQ}"
+    date: str
+    ticker: str
+    name: str
+
+    # What the system said
+    analysis_state: str
+    trade_state: str
+
+    # Computed target (precise instruction)
+    target_pct: int                   # -100 to +100, rounded to nearest 5
+    prior_target_pct: int
+    delta_pct: int                    # target_pct - prior_target_pct
+
+    # Components of the computation
+    confidence: int
+    direction: int                    # +1, 0, -1
+    base_size: int                    # 25, 50, 75, 100
+    regime_multiplier: float
+    character_modifier: float
+    horizon_modifier: float
+    notional: float                   # abs(target_pct) * confidence
+
+    # Context
+    regime_gate: str
+    regime_character: str
+    horizon_pattern: str
+    pump_score: float
+    pump_delta: float
+    reversal_score: float
+    reversal_percentile: float
+
+    # RS at all horizons
+    rs_2d: float
+    rs_5d: float
+    rs_10d: float
+    rs_20d: float
+    rs_60d: float
+    rs_120d: float
+    rs_rank: int
+
+    entry_price: float
+
+    # Forward returns (filled progressively)
+    fwd_1d: Optional[float] = None
+    fwd_2d: Optional[float] = None
+    fwd_5d: Optional[float] = None
+    fwd_10d: Optional[float] = None
+    fwd_20d: Optional[float] = None
+    fwd_60d: Optional[float] = None
+
+    # Forward RS vs SPY
+    fwd_rs_1d: Optional[float] = None
+    fwd_rs_2d: Optional[float] = None
+    fwd_rs_5d: Optional[float] = None
+    fwd_rs_10d: Optional[float] = None
+    fwd_rs_20d: Optional[float] = None
+    fwd_rs_60d: Optional[float] = None
+
+    # P&L
+    pnl_1d: Optional[float] = None
+    pnl_5d: Optional[float] = None
+    pnl_10d: Optional[float] = None
+    pnl_20d: Optional[float] = None
+    pnl_60d: Optional[float] = None
+
+    # Status
+    status: str = "open"
+    close_date: Optional[str] = None
+    close_reason: Optional[str] = None
+    hit_10d: Optional[bool] = None
+    hit_20d: Optional[bool] = None
+
+    # Pair trade
+    pair_id: Optional[str] = None
+    pair_leg: Optional[str] = None
+    pair_counterpart: Optional[str] = None
+
+
+@dataclass
+class JournalSummary:
+    total_calls: int
+    open_calls: int
+    closed_calls: int
+    total_pnl_10d: float
+    total_pnl_20d: float
+    avg_pnl_per_call_10d: float
+    avg_pnl_per_call_20d: float
+    hit_rate_10d: float
+    hit_rate_20d: float
+    pnl_by_state: dict
+    hit_rate_by_state: dict
+    pnl_by_regime: dict
+    hit_rate_by_regime: dict
+    pnl_by_pattern: dict
+    hit_rate_by_pattern: dict
+    pnl_by_confidence: dict
+    hit_rate_by_confidence: dict
+    cumulative_pnl: list
