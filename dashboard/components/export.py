@@ -298,7 +298,7 @@ def _build_claude_xml(result: dict) -> str:
     for r in rs_readings:
         state = states.get(r.ticker)
         sv = state.state.value if state else "—"
-        L.append(f'    <row ticker="{r.ticker}" name="{r.name}" '
+        L.append(f'    <row ticker="{r.ticker}" name="{X(r.name)}" '
                  f'rs_5d="{r.rs_5d*100:+.1f}%" color_5d="{_rs_color_word(r.rs_5d)}" '
                  f'rs_20d="{r.rs_20d*100:+.1f}%" color_20d="{_rs_color_word(r.rs_20d)}" '
                  f'rs_60d="{r.rs_60d*100:+.1f}%" color_60d="{_rs_color_word(r.rs_60d)}" '
@@ -312,7 +312,7 @@ def _build_claude_xml(result: dict) -> str:
         pump = pumps.get(r.ticker)
         rev = rev_map.get(r.ticker)
         trend = _trend_description(prices, r.ticker)
-        L.append(f'    <sector ticker="{r.ticker}" name="{r.name}" rank="{r.rs_rank}">')
+        L.append(f'    <sector ticker="{r.ticker}" name="{X(r.name)}" rank="{r.rs_rank}">')
         L.append(f'      <rs rs_5d="{r.rs_5d:.6f}" rs_20d="{r.rs_20d:.6f}" rs_60d="{r.rs_60d:.6f}" '
                  f'slope="{r.rs_slope:.6f}" composite="{r.rs_composite:.2f}"/>')
         L.append(f'      <sparkline_trend description="20d RS sparkline over 60 trading days: {trend}"/>')
@@ -361,7 +361,7 @@ def _build_claude_xml(result: dict) -> str:
             sv = state.state.value if state else "—"
             parent_state = states.get(ir.parent_sector)
             psv = parent_state.state.value if parent_state else "—"
-            L.append(f'    <row ticker="{ir.ticker}" name="{ir.name}" parent="{ir.parent_sector}" '
+            L.append(f'    <row ticker="{ir.ticker}" name="{X(ir.name)}" parent="{ir.parent_sector}" '
                      f'rs_5d="{ir.rs_5d*100:+.1f}%" color_5d="{_rs_color_word(ir.rs_5d)}" '
                      f'rs_20d="{ir.rs_20d*100:+.1f}%" color_20d="{_rs_color_word(ir.rs_20d)}" '
                      f'rs_60d="{ir.rs_60d*100:+.1f}%" color_60d="{_rs_color_word(ir.rs_60d)}" '
@@ -377,7 +377,7 @@ def _build_claude_xml(result: dict) -> str:
             state = states.get(ir.ticker)
             parent_state = states.get(ir.parent_sector)
             trend = _trend_description(prices, ir.ticker)
-            L.append(f'    <industry ticker="{ir.ticker}" name="{ir.name}" parent="{ir.parent_sector}" '
+            L.append(f'    <industry ticker="{ir.ticker}" name="{X(ir.name)}" parent="{ir.parent_sector}" '
                      f'rank="{ir.rs_rank}" rank_within_sector="{ir.rs_rank_within_sector}">')
             L.append(f'      <rs rs_5d="{ir.rs_5d:.6f}" rs_20d="{ir.rs_20d:.6f}" rs_60d="{ir.rs_60d:.6f}" '
                      f'slope="{ir.rs_slope:.6f}" composite="{ir.industry_composite:.2f}"/>')
@@ -404,14 +404,14 @@ def _build_claude_xml(result: dict) -> str:
     # ── 1d Moves ──
     L.append(f'  <today_moves spy_1d="{spy_1d:.6f}">')
     for m in sorted(moves_1d, key=lambda x: x["rs_1d"], reverse=True):
-        L.append(f'    <move ticker="{m["ticker"]}" name="{m["name"]}" '
+        L.append(f'    <move ticker="{m["ticker"]}" name="{X(m["name"])}" '
                  f'return_1d="{m["return_1d"]:.6f}" rs_1d="{m["rs_1d"]:.6f}"/>')
     L.append('  </today_moves>')
 
     # ── Rolling RS Leaders ──
     L.append('  <rolling_leaders>')
     for label, (t, name, v) in rolling_leaders.items():
-        L.append(f'    <leader period="{label}" ticker="{t}" name="{name}" rs="{v:.6f}"/>')
+        L.append(f'    <leader period="{label}" ticker="{t}" name="{X(name)}" rs="{v:.6f}"/>')
     L.append('  </rolling_leaders>')
 
     # ── Baton Pass Alerts ──
