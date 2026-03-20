@@ -53,11 +53,23 @@ def render_interpretation_panel(result: dict):
                f"(intraday during market hours, close after hours)")
 
     def _safe_return(series, n):
-        """Compute n-period return from last valid values. Handles after-hours NaN."""
+        """Compute n-period return from last valid values. Handles after-hours.
+
+        If the last two values are identical (forward-fill from after-hours),
+        shift back by 1 so we compare the last real close vs n days before that.
+        """
         vals = series.dropna()
-        if len(vals) <= n:
+        if len(vals) <= n + 1:
             return 0.0
-        return float(vals.iloc[-1] / vals.iloc[-(n + 1)] - 1)
+        # Detect after-hours forward-fill: last two values identical
+        offset = 0
+        if vals.iloc[-1] == vals.iloc[-2] and len(vals) > n + 2:
+            offset = 1  # Shift back — use prior session as "today"
+        end = len(vals) - 1 - offset
+        start = end - n
+        if start < 0:
+            return 0.0
+        return float(vals.iloc[end] / vals.iloc[start] - 1)
 
     # ── Market Summary ────────────────────────────────
     # 1d = today's latest vs yesterday's close. All metrics use today as endpoint.
