@@ -303,6 +303,7 @@ def _build_claude_xml(result: dict) -> str:
                  f'note="FRED data delayed 1-2 business days"/>')
 
     # ── Sector Heatmap (text) ──
+    horizon_readings = result.get("horizon_readings", {})
     L.append('  <sector_heatmap description="RS Heat Map: rows=sectors sorted by rank, '
              'columns=5d/20d/60d RS. Color: green=outperforming SPY, red=underperforming, '
              'centered on 0. Pattern reading: green-green-green=sustained leader, '
@@ -321,7 +322,6 @@ def _build_claude_xml(result: dict) -> str:
     L.append('  </sector_heatmap>')
 
     # ── Sectors ──
-    horizon_readings = result.get("horizon_readings", {})
     L.append('  <sectors>')
     for r in rs_readings:
         state = states.get(r.ticker)
