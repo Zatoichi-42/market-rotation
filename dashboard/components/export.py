@@ -415,11 +415,13 @@ def _build_claude_xml(result: dict) -> str:
     L.append('  </rolling_leaders>')
 
     # ── Baton Pass Alerts ──
+    L.append('  <baton_pass_alerts>')
     if baton_alerts:
-        L.append('  <baton_pass_alerts>')
         for a in baton_alerts:
             L.append(f'    <alert>{X(a)}</alert>')
-        L.append('  </baton_pass_alerts>')
+    else:
+        L.append('    <alert>No baton pass alerts above 0.10 threshold today.</alert>')
+    L.append('  </baton_pass_alerts>')
 
     # ── Reversal Diagnostics (top 5) ──
     rev_sorted = sorted(reversal_scores, key=lambda x: x.reversal_score, reverse=True)[:5]

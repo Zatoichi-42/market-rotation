@@ -96,3 +96,35 @@ class TestClassifyAllIndustries:
         results = classify_all_industries(irs)
         assert results["SMH"].state == AnalysisState.OVERT_PUMP
         assert results["XBI"].state == AnalysisState.OVERT_DUMP
+
+
+def test_xhb_all_negative_rs_not_accumulation():
+    """XHB regression: all RS negative with tiny positive slope must NOT be Accumulation."""
+    ir = IndustryRSReading(
+        ticker="XHB", name="Homebuilders", parent_sector="XLY",
+        group_type=GroupType.INDUSTRY,
+        rs_5d=-0.014245, rs_20d=-0.126815, rs_60d=-0.019304,
+        rs_slope=0.016772, rs_composite=29.57,
+        rs_5d_vs_parent=-0.0075, rs_20d_vs_parent=-0.1038,
+        rs_60d_vs_parent=0.0475, rs_slope_vs_parent=0.0,
+        rs_composite_vs_parent=0.0, industry_composite=29.57,
+        rs_rank=21, rs_rank_change=0, rs_rank_within_sector=3,
+    )
+    result = classify_industry_state(ir)
+    assert result.state != AnalysisState.ACCUMULATION
+
+
+def test_oih_overt_pump_blocked_when_lagging_parent():
+    """OIH regression: Overt Pump blocked when vs_parent_20d < -5%."""
+    ir = IndustryRSReading(
+        ticker="OIH", name="Oil Services", parent_sector="XLE",
+        group_type=GroupType.INDUSTRY,
+        rs_5d=0.062, rs_20d=0.051, rs_60d=0.417,
+        rs_slope=0.019, rs_composite=79.68,
+        rs_5d_vs_parent=0.027, rs_20d_vs_parent=-0.074,
+        rs_60d_vs_parent=0.049, rs_slope_vs_parent=0.0,
+        rs_composite_vs_parent=0.0, industry_composite=79.68,
+        rs_rank=4, rs_rank_change=0, rs_rank_within_sector=2,
+    )
+    result = classify_industry_state(ir)
+    assert result.state != AnalysisState.OVERT_PUMP

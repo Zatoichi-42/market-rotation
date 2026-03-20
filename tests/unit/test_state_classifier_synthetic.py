@@ -126,6 +126,28 @@ class TestStateAssignment:
         )
         assert result.state == AnalysisState.AMBIGUOUS
 
+    def test_overt_pump_blocked_with_negative_60d_rs(self):
+        """XLK regression: negative 60d RS should block Overt Pump."""
+        pump = _pump(score=0.85, delta=0.04, rs=70.0, part=60.0, flow=60.0)
+        result = classify_state(
+            pump=pump, prior=None, regime=RegimeState.FRAGILE,
+            rs_rank=3, pump_percentile=80.0,
+            delta_history=[0.03, 0.04, 0.04, 0.03, 0.04],
+            settings=SETTINGS, rs_60d=-0.010,
+        )
+        assert result.state != AnalysisState.OVERT_PUMP
+
+    def test_sustained_leader_not_accumulation(self):
+        """XLE regression: rank #1 with 60d RS +37% should be Broadening, not Accumulation."""
+        pump = _pump(score=0.66, delta=-0.004, rs=70.0, part=60.0, flow=60.0)
+        result = classify_state(
+            pump=pump, prior=None, regime=RegimeState.FRAGILE,
+            rs_rank=1, pump_percentile=90.0,
+            delta_history=[-0.004, 0.01, -0.004, 0.008, -0.004],
+            settings=SETTINGS, rs_60d=0.379,
+        )
+        assert result.state in (AnalysisState.BROADENING, AnalysisState.OVERT_PUMP)
+
 
 # ═══════════════════════════════════════════════════════
 # TRANSITION PRESSURE
@@ -452,3 +474,65 @@ class TestMatureHoldLogic:
             settings=SETTINGS,
         )
         assert result.state != AnalysisState.OVERT_PUMP
+
+
+class TestRSFlowThrough:
+    """Verify RS values actually reach classify_state via classify_all_sectors."""
+
+    def test_all_negative_rs_blocks_accumulation(self):
+        """XLY regression: all RS negative + positive delta must NOT be Accumulation."""
+        from engine.state_classifier import classify_all_sectors
+        pump = PumpScoreReading(
+            ticker="XLY", name="Consumer Discretionary",
+            rs_pillar=36.0, participation_pillar=50.0, flow_pillar=50.0,
+            pump_score=0.345, pump_delta=0.019, pump_delta_5d_avg=0.019,
+        )
+        rs_values = {"XLY": (-0.007, -0.023, -0.067)}
+        result = classify_all_sectors(
+            pumps={"XLY": pump}, priors={}, regime=RegimeState.FRAGILE,
+            rs_ranks={"XLY": 7}, pump_percentiles={"XLY": 35.0},
+            delta_histories={"XLY": [0.019]}, settings=SETTINGS,
+            rs_values=rs_values,
+        )
+        assert result["XLY"].state != AnalysisState.ACCUMULATION
+
+    def test_without_rs_values_backward_compatible(self):
+        """classify_all_sectors without rs_values still works."""
+        from engine.state_classifier import classify_all_sectors
+        pump = PumpScoreReading(
+            ticker="XLK", name="Technology",
+            rs_pillar=50.0, participation_pillar=50.0, flow_pillar=50.0,
+            pump_score=0.50, pump_delta=0.01, pump_delta_5d_avg=0.01,
+        )
+        result = classify_all_sectors(
+            pumps={"XLK": pump}, priors={}, regime=RegimeState.NORMAL,
+            rs_ranks={"XLK": 3}, pump_percentiles={"XLK": 50.0},
+            delta_histories={"XLK": [0.01]}, settings=SETTINGS,
+        )
+        assert isinstance(result, dict)
+        assert "XLK" in result
+
+    def test_xly_exact_mar19_values_not_accumulation(self):
+        """TEST-ANTI-01: Exact XLY values from 2026-03-19."""
+        from engine.state_classifier import classify_all_sectors
+        pump = PumpScoreReading(
+            ticker="XLY", name="Consumer Discretionary",
+            rs_pillar=36.0, participation_pillar=50.0, flow_pillar=50.0,
+            pump_score=0.444, pump_delta=0.024, pump_delta_5d_avg=0.0128,
+        )
+        rev = ReversalScoreReading(
+            ticker="XLY", name="Consumer Discretionary",
+            breadth_det_pillar=33.2, price_break_pillar=53.3, crowding_pillar=15.3,
+            reversal_score=0.3389, sub_signals={},
+            reversal_percentile=100.0, above_75th=True,
+        )
+        rs_values = {"XLY": (-0.005469, -0.018850, -0.066214)}
+        result = classify_all_sectors(
+            pumps={"XLY": pump}, priors={}, regime=RegimeState.FRAGILE,
+            rs_ranks={"XLY": 6}, pump_percentiles={"XLY": 35.0},
+            delta_histories={"XLY": [0.024]}, settings=SETTINGS,
+            reversal_scores={"XLY": rev}, rs_values=rs_values,
+        )
+        assert result["XLY"].state != AnalysisState.ACCUMULATION
+        assert result["XLY"].state != AnalysisState.BROADENING
+        assert result["XLY"].state != AnalysisState.OVERT_PUMP

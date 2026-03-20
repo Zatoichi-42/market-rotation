@@ -114,6 +114,7 @@ def classify_all_sectors(
     reversal_scores: dict[str, ReversalScoreReading] | None = None,
     concentrations: dict | None = None,
     catalyst_confidence_modifier: int = 0,
+    rs_values: dict[str, tuple[float, float, float]] | None = None,
 ) -> dict[str, StateClassification]:
     """Classify all sectors. Returns dict[ticker, StateClassification]."""
     results = {}
@@ -125,12 +126,17 @@ def classify_all_sectors(
         rev = reversal_scores.get(ticker) if reversal_scores else None
         conc = concentrations.get(ticker) if concentrations else None
 
+        rs_5d_val, rs_20d_val, rs_60d_val = (0.0, 0.0, 0.0)
+        if rs_values and ticker in rs_values:
+            rs_5d_val, rs_20d_val, rs_60d_val = rs_values[ticker]
+
         results[ticker] = classify_state(
             pump=pump, prior=prior, regime=regime,
             rs_rank=rank, pump_percentile=pctl,
             delta_history=hist, settings=settings,
             reversal_score=rev, concentration=conc,
             catalyst_confidence_modifier=catalyst_confidence_modifier,
+            rs_5d=rs_5d_val, rs_20d=rs_20d_val, rs_60d=rs_60d_val,
         )
     return results
 
@@ -225,7 +231,8 @@ def _determine_state(
     if (pump_percentile >= min_overt_pctl
             and rs_rank <= 3
             and delta > _DELTA_NEAR_ZERO
-            and rev_pctl < 75):
+            and rev_pctl < 75
+            and rs_60d > -0.005):
         return AnalysisState.OVERT_PUMP
 
     # Mature hold: top rank + high percentile + flat delta
@@ -277,6 +284,15 @@ def _determine_state(
     if (consec_positive >= min_broad_sessions
             and pump_percentile > 50
             and rev_pctl < 75):
+        return AnalysisState.BROADENING
+
+    # ── STEP 6b: SUSTAINED LEADER ──
+    # Rank #1 + very strong 60d RS = sustained leader, not mere Accumulation
+    if (rs_rank == 1
+            and pump_percentile >= 80
+            and rs_60d > 0.10
+            and rev_pctl < 75
+            and consec_negative < 3):
         return AnalysisState.BROADENING
 
     # ── STEP 7: ACCUMULATION ──

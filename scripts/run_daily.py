@@ -172,11 +172,13 @@ def run_pipeline(settings, universe, force_refresh=False):
     # State Classifier
     rs_ranks = {r.ticker: r.rs_rank for r in rs_readings}
     pump_pcts = percentile_rank(pd.Series({t: p.pump_score for t, p in pumps.items()}))
+    rs_vals = {r.ticker: (r.rs_5d, r.rs_20d, r.rs_60d) for r in rs_readings}
     states = classify_all_sectors(
         pumps=pumps, priors=prior_states, regime=regime.state,
         rs_ranks=rs_ranks, pump_percentiles=pump_pcts.to_dict(),
         delta_histories=delta_histories,
         settings=settings["state"],
+        rs_values=rs_vals,
     )
 
     # Save snapshot

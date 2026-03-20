@@ -160,11 +160,13 @@ def compute_snapshots(prices, volumes, vix, vix3m, settings, min_warmup=60):
             # State Classifier
             rs_ranks = {r.ticker: r.rs_rank for r in rs_readings}
             pump_pcts = percentile_rank(pd.Series({t: p.pump_score for t, p in pumps.items()}))
+            rs_vals = {r.ticker: (r.rs_5d, r.rs_20d, r.rs_60d) for r in rs_readings}
             states = classify_all_sectors(
                 pumps=pumps, priors=prior_states, regime=regime.state,
                 rs_ranks=rs_ranks, pump_percentiles=pump_pcts.to_dict(),
                 delta_histories={t: delta_histories[t][-10:] for t in SECTOR_TICKERS},
                 settings=settings["state"],
+                rs_values=rs_vals,
             )
 
             # Save snapshot

@@ -293,6 +293,14 @@ def run_pipeline():
     for ir in industry_rs_readings:
         all_ranks[ir.ticker] = ir.rs_rank
     pump_pcts = percentile_rank(pd.Series({t: p.pump_score for t, p in pumps.items()}))
+
+    # Build RS values dict for state classifier veto checks
+    rs_vals = {}
+    for r in rs_readings:
+        rs_vals[r.ticker] = (r.rs_5d, r.rs_20d, r.rs_60d)
+    for ir in industry_rs_readings:
+        rs_vals[ir.ticker] = (ir.rs_5d, ir.rs_20d, ir.rs_60d)
+
     states = classify_all_sectors(
         pumps=pumps, priors=prior_states, regime=regime.state,
         rs_ranks=all_ranks, pump_percentiles=pump_pcts.to_dict(),
@@ -301,6 +309,7 @@ def run_pipeline():
         reversal_scores=reversal_map,
         concentrations=concentration_map,
         catalyst_confidence_modifier=catalyst_assessment.confidence_modifier,
+        rs_values=rs_vals,
     )
 
     # Industry states from multi-timeframe RS pattern

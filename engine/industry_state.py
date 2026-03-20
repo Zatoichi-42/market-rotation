@@ -38,12 +38,15 @@ def classify_industry_state(
     tf_neg = sum(1 for v in [rs_5d, rs_20d, rs_60d] if v < -0.001)
     all_rs_neg = tf_neg == 3
 
+    # Check vs-parent: if underperforming parent by >5% on 20d, not truly driving sector
+    vs_parent_ok = ir.rs_20d_vs_parent > -0.05
+
     # Determine state from RS pattern (7-state)
-    if tf_pos >= 2 and slope > 0.001 and rank <= 5 and composite >= 70:
+    if tf_pos >= 2 and slope > 0.001 and rank <= 5 and composite >= 70 and vs_parent_ok:
         state = AnalysisState.OVERT_PUMP
-    elif tf_pos >= 2 and slope > 0.001:
+    elif tf_pos >= 2 and slope > 0.001 and not all_rs_neg:
         state = AnalysisState.BROADENING
-    elif slope > 0.001 or rs_5d > 0.001:
+    elif (slope > 0.001 or rs_5d > 0.001) and not all_rs_neg:
         state = AnalysisState.ACCUMULATION
     elif rs_60d > 0.005 and (slope < -0.001 or rs_5d < -0.001):
         # Was strong (60d positive) but short-term weakening
@@ -54,6 +57,9 @@ def classify_industry_state(
         state = AnalysisState.EXHAUSTION
     elif tf_neg >= 2 and slope < -0.001:
         state = AnalysisState.DISTRIBUTION
+    elif all_rs_neg and slope > 0.001:
+        # All RS negative but slope turning — bottom fishing or dead cat bounce
+        state = AnalysisState.AMBIGUOUS
     elif tf_pos >= 1 and tf_neg >= 1:
         state = AnalysisState.AMBIGUOUS
     else:
