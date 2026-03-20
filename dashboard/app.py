@@ -133,6 +133,36 @@ def run_pipeline():
                                        gold_silver_reading=gs_reading,
                                        gold_divergence_reading=gd_reading)
 
+    # Crisis Type Detection (Phase 5)
+    from engine.crisis_alignment import detect_crisis_type
+    oil_signal_level = "NORMAL"
+    for sig in regime.signals:
+        if "oil" in sig.name.lower():
+            oil_signal_level = sig.level.value
+    credit_signal_level = "NORMAL"
+    for sig in regime.signals:
+        if "credit" in sig.name.lower() or "oas" in sig.name.lower():
+            credit_signal_level = sig.level.value
+    corr_signal_level = "NORMAL"
+    for sig in regime.signals:
+        if "corr" in sig.name.lower():
+            corr_signal_level = sig.level.value
+    term_signal_level = "NORMAL"
+    for sig in regime.signals:
+        if "term" in sig.name.lower():
+            term_signal_level = sig.level.value
+
+    crisis_types = detect_crisis_type(
+        oil_level=oil_signal_level,
+        credit_level=credit_signal_level,
+        gold_divergence_active=(gd_reading.is_margin_call_regime if gd_reading else False),
+        gold_silver_stress=(gs_reading.margin_call_amplifier if gs_reading else False),
+        vix_level=vix_val,
+        correlation_level=corr_signal_level,
+        term_structure_level=term_signal_level,
+        breadth_trend="deteriorating" if bz < -0.5 else ("improving" if bz > 0.5 else "stable"),
+    )
+
     # Regime Character (Phase 4)
     from engine.regime_character import classify_regime_character
     from engine.correlation import compute_cross_sector_dispersion
@@ -429,6 +459,8 @@ def run_pipeline():
         "reversal_map": reversal_map,
         "rs_readings": rs_readings,
         "current_date": current_date,
+        "vix_level": vix_val,
+        "crisis_types": crisis_types,
     }
 
     new_calls = generate_calls(
@@ -486,6 +518,7 @@ def run_pipeline():
         "regime_character": regime_char_reading,
         "journal_calls": journal_calls,
         "journal_summary": journal_summary,
+        "crisis_types": crisis_types,
     }
 
 
@@ -504,16 +537,19 @@ def main():
         f"Price data through: **{prices_last}** (today's latest — refreshes every 5 min)"
     )
 
-    # Tab layout
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
-        "Regime Gate", "Sector Rankings", "Industries", "Breadth",
+    # Tab layout — Briefing is Page 1
+    tb0, tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
+        "Briefing", "Regime Gate", "Sector Rankings", "Industries", "Breadth",
         "Today", "Journal", "Signal Reliability", "Replay", "Debug",
     ])
+
+    with tb0:
+        from dashboard.components.briefing import render_briefing
+        render_briefing(result)
 
     with tab1:
         from dashboard.components.regime_panel import render_regime_panel
         render_regime_panel(result)
-        # Baton pass alerts + reversal diagnostics on page 1
         from dashboard.components.baton_pass_alert import render_baton_pass_alerts
         render_baton_pass_alerts(result)
         _render_industry_divergence_alerts(result)

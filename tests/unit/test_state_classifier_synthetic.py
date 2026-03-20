@@ -536,3 +536,68 @@ class TestRSFlowThrough:
         assert result["XLY"].state != AnalysisState.ACCUMULATION
         assert result["XLY"].state != AnalysisState.BROADENING
         assert result["XLY"].state != AnalysisState.OVERT_PUMP
+
+
+class TestXLERank1Regression:
+    """Fix D: XLE rank #1 with Full Confirm must not be Ambiguous."""
+
+    def test_xle_rank1_full_confirm_not_ambiguous(self):
+        """
+        Regression: XLE March 20, 2026 — rank #1, Full Confirm, all RS green,
+        60d RS +39.4%, rev_pctl 76.2. Must be Broadening, not Ambiguous.
+        """
+        from engine.schemas import HorizonPattern
+        pump = PumpScoreReading(
+            ticker="XLE", name="Energy",
+            rs_pillar=80, participation_pillar=45, flow_pillar=50,
+            pump_score=0.6156, pump_delta=-0.0509, pump_delta_5d_avg=0.0031,
+        )
+        rev = ReversalScoreReading(
+            ticker="XLE", name="Energy",
+            breadth_det_pillar=50, price_break_pillar=50, crowding_pillar=50,
+            reversal_score=0.5, sub_signals={},
+            reversal_percentile=76.2, above_75th=True,
+        )
+        result = classify_state(
+            pump=pump, prior=None, regime=RegimeState.FRAGILE,
+            rs_rank=1, pump_percentile=85.0,
+            delta_history=[-0.02, -0.03, -0.05, -0.05, 0.01, 0.02, 0.03],
+            settings=SETTINGS,
+            reversal_score=rev,
+            rs_5d=0.049, rs_20d=0.140, rs_60d=0.394,
+            horizon_pattern=HorizonPattern.FULL_CONFIRM,
+        )
+        assert result.state != AnalysisState.AMBIGUOUS, (
+            f"XLE rank #1 Full Confirm 60d +39.4% should NOT be Ambiguous. "
+            f"Got {result.state.value} at confidence {result.confidence}"
+        )
+        assert result.state in (AnalysisState.BROADENING, AnalysisState.ACCUMULATION)
+        assert result.confidence >= 45, (
+            f"Rank-1 confidence floor should be 45, got {result.confidence}"
+        )
+
+    def test_rank3_does_not_get_widened_threshold(self):
+        """Non-rank-1 sectors keep the 75 reversal threshold."""
+        from engine.schemas import HorizonPattern
+        pump = PumpScoreReading(
+            ticker="XLK", name="Technology",
+            rs_pillar=80, participation_pillar=45, flow_pillar=50,
+            pump_score=0.62, pump_delta=-0.05, pump_delta_5d_avg=0.003,
+        )
+        rev = ReversalScoreReading(
+            ticker="XLK", name="Technology",
+            breadth_det_pillar=50, price_break_pillar=50, crowding_pillar=50,
+            reversal_score=0.5, sub_signals={},
+            reversal_percentile=76.2, above_75th=True,
+        )
+        result = classify_state(
+            pump=pump, prior=None, regime=RegimeState.FRAGILE,
+            rs_rank=3, pump_percentile=85.0,
+            delta_history=[-0.02, -0.03, -0.05, -0.05, 0.01, 0.02, 0.03],
+            settings=SETTINGS,
+            reversal_score=rev,
+            rs_5d=0.049, rs_20d=0.140, rs_60d=0.394,
+            horizon_pattern=HorizonPattern.FULL_CONFIRM,
+        )
+        # Rank 3 should NOT get the sustained leader widened threshold
+        assert result.state != AnalysisState.BROADENING or result.confidence < 45

@@ -458,6 +458,18 @@ class HorizonReading:
     is_entry_zone: bool                # True for HEALTHY_DIP
 
 
+# ── Crisis Type (Phase 5) ─────────────────────────
+
+class CrisisType(Enum):
+    NONE = "None"
+    OIL_SHOCK = "Oil Shock"
+    RATE_SHOCK = "Rate Shock"
+    CREDIT_CRISIS = "Credit Crisis"
+    MARGIN_CALL = "Margin Call"
+    GEOPOLITICAL = "Geopolitical"
+    MULTI_CRISIS = "Multi-Crisis"
+
+
 # ── Regime Character (Phase 4) ────────────────────
 
 class RegimeCharacter(Enum):

@@ -92,7 +92,8 @@ def classify_state(
                                       reversal_score=reversal_score,
                                       concentration=concentration,
                                       catalyst_confidence_modifier=catalyst_confidence_modifier,
-                                      horizon_pattern=horizon_pattern)
+                                      horizon_pattern=horizon_pattern,
+                                      rs_5d=rs_5d, rs_20d=rs_20d, rs_60d=rs_60d)
 
     # Apply confidence floors — downgrade if below minimum
     state, confidence = _apply_confidence_floors(state, confidence)
@@ -304,11 +305,16 @@ def _determine_state(
         return AnalysisState.BROADENING
 
     # ── STEP 6b: SUSTAINED LEADER ──
-    # Rank #1 + very strong 60d RS = sustained leader, not mere Accumulation
+    # Rank #1 with strong 60d RS gets a wider reversal leash.
+    # A sector that has dominated for 3 months earns more room before downgrade.
+    _sustained_rev_threshold = 75
+    if rs_rank == 1 and rs_60d > 0.20:
+        _sustained_rev_threshold = 85
+
     if (rs_rank == 1
             and pump_percentile >= 80
             and rs_60d > 0.10
-            and rev_pctl < 75
+            and rev_pctl < _sustained_rev_threshold
             and consec_negative < 3
             and not _bullish_blocked):
         return AnalysisState.BROADENING
@@ -384,6 +390,9 @@ def _compute_confidence(
     concentration=None,
     catalyst_confidence_modifier: int = 0,
     horizon_pattern: HorizonPattern | None = None,
+    rs_5d: float = 0.0,
+    rs_20d: float = 0.0,
+    rs_60d: float = 0.0,
 ) -> int:
     confidence = 60
 
@@ -453,5 +462,13 @@ def _compute_confidence(
         confidence -= 25
     elif regime == RegimeState.FRAGILE:
         confidence -= 15
+
+    # ── Rank-1 confidence floor ──
+    # The market's dominant sector with all horizons confirming cannot
+    # drop below confidence 45 regardless of regime penalties.
+    if (rs_rank == 1
+            and horizon_pattern == HorizonPattern.FULL_CONFIRM
+            and rs_5d > 0 and rs_20d > 0 and rs_60d > 0):
+        confidence = max(confidence, 45)
 
     return max(10, min(95, confidence))

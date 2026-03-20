@@ -151,6 +151,27 @@ def _enum_value(v) -> str:
     return v.value if hasattr(v, "value") else str(v)
 
 
+# ── Graduated FRAGILE scaling ───────────────────────────
+
+def _graduated_regime_multiplier(regime_gate: RegimeState, vix_level: float = 25.0) -> float:
+    """
+    Graduated regime scaling.
+    NORMAL: 1.0 (always)
+    HOSTILE: 0.25 (always)
+    FRAGILE: scales linearly from 0.7 (VIX=20) to 0.4 (VIX=30)
+    """
+    if regime_gate == RegimeState.NORMAL:
+        return 1.0
+    if regime_gate == RegimeState.HOSTILE:
+        return 0.25
+    # FRAGILE: linear interpolation
+    if vix_level <= 20:
+        return 0.7
+    if vix_level >= 30:
+        return 0.4
+    return round(0.7 - (vix_level - 20) * 0.03, 3)
+
+
 # ── Core computation ─────────────────────────────────────
 
 def compute_target_pct(
@@ -159,6 +180,9 @@ def compute_target_pct(
     regime_gate,
     regime_character,
     horizon_pattern,
+    vix_level: float = 25.0,
+    ticker: str = "",
+    crisis_types: list | None = None,
 ) -> tuple[int, int, int, float, float, float]:
     """
     Compute the target position percentage and its components.
@@ -181,8 +205,24 @@ def compute_target_pct(
 
     is_long = direction == 1
     confidence_scale = confidence / 100.0
-    regime_mult = _REGIME_MULTIPLIER[regime_gate]
-    char_mod = _CHARACTER_MODIFIER.get((regime_character, is_long), 1.0)
+    regime_mult = _graduated_regime_multiplier(regime_gate, vix_level)
+
+    # Character modifier — use crisis alignment if in Crisis with known types
+    from engine.schemas import RegimeCharacter as RC
+    if (regime_character == RC.CRISIS
+            and crisis_types
+            and ticker):
+        from engine.crisis_alignment import get_crisis_modifier, CrisisType
+        # Filter out NONE
+        active = [ct for ct in crisis_types
+                  if ct != CrisisType.NONE and ct != CrisisType.MULTI_CRISIS]
+        if active:
+            char_mod = get_crisis_modifier(ticker, crisis_types, is_long)
+        else:
+            char_mod = _CHARACTER_MODIFIER.get((regime_character, is_long), 1.0)
+    else:
+        char_mod = _CHARACTER_MODIFIER.get((regime_character, is_long), 1.0)
+
     horizon_mod = _HORIZON_MODIFIER.get((horizon_pattern, is_long), 1.0)
 
     raw = direction * base_size * confidence_scale * regime_mult * char_mod * horizon_mod
@@ -307,6 +347,8 @@ def generate_calls(
     pumps = market_data.get("pumps", {})
     reversal_map = market_data.get("reversal_map", {})
     rs_readings = market_data.get("rs_readings", [])
+    vix_level = market_data.get("vix_level", 25.0)
+    crisis_types = market_data.get("crisis_types", None)
 
     # Build RS lookup by ticker
     rs_by_ticker: dict = {}
@@ -335,6 +377,9 @@ def generate_calls(
             regime_gate,
             regime_character,
             pattern,
+            vix_level=vix_level,
+            ticker=ticker,
+            crisis_types=crisis_types,
         )
 
         prior = prior_targets.get(ticker, 0)
