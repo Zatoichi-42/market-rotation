@@ -169,6 +169,11 @@ def run_pipeline(settings, universe, force_refresh=False):
         except Exception:
             pass
 
+    # Horizon Patterns (Phase 4)
+    from engine.horizon_patterns import classify_all_horizon_patterns
+    horizon_readings = classify_all_horizon_patterns(rs_readings)
+    horizon_pattern_map = {t: hr.pattern for t, hr in horizon_readings.items()}
+
     # State Classifier
     rs_ranks = {r.ticker: r.rs_rank for r in rs_readings}
     pump_pcts = percentile_rank(pd.Series({t: p.pump_score for t, p in pumps.items()}))
@@ -179,6 +184,7 @@ def run_pipeline(settings, universe, force_refresh=False):
         delta_histories=delta_histories,
         settings=settings["state"],
         rs_values=rs_vals,
+        horizon_patterns=horizon_pattern_map,
     )
 
     # Save snapshot

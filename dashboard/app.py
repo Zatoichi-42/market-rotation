@@ -28,7 +28,7 @@ from engine.state_classifier import classify_all_sectors
 from engine.catalyst_gate import load_catalyst_calendar, assess_catalyst
 from engine.concentration_monitor import compute_concentration_all
 from engine.schemas import (
-    DailySnapshot, PumpScoreReading, RegimeState,
+    DailySnapshot, PumpScoreReading, RegimeState, RegimeCharacter,
 )
 
 st.set_page_config(page_title="Pump Rotation System", layout="wide", page_icon="📊")
@@ -133,6 +133,44 @@ def run_pipeline():
                                        gold_silver_reading=gs_reading,
                                        gold_divergence_reading=gd_reading)
 
+    # Regime Character (Phase 4)
+    from engine.regime_character import classify_regime_character
+    from engine.correlation import compute_cross_sector_dispersion
+    # SPY 20d return
+    spy_20d_return = 0.0
+    if "SPY" in prices.columns and len(prices) >= 21:
+        spy_vals = prices["SPY"].dropna()
+        if len(spy_vals) >= 21:
+            spy_20d_return = float(spy_vals.iloc[-1] / spy_vals.iloc[-21] - 1)
+
+    # VIX 20d change
+    vix_20d_change = 0.0
+    if len(data["vix"]) >= 21:
+        vix_20d_change = float(data["vix"].iloc[-1] - data["vix"].iloc[-21])
+
+    # Breadth 5d change (z-score delta)
+    breadth_zscore_change_5d = 0.0  # Approximation — use RSP/SPY change
+    if "RSP" in prices.columns and "SPY" in prices.columns and len(prices) >= 6:
+        rsp = prices["RSP"].dropna()
+        spy_s = prices["SPY"].dropna()
+        if len(rsp) >= 6 and len(spy_s) >= 6:
+            ratio_now = rsp.iloc[-1] / spy_s.iloc[-1]
+            ratio_5d = rsp.iloc[-6] / spy_s.iloc[-6]
+            breadth_zscore_change_5d = float(ratio_now - ratio_5d) * 10  # scale
+
+    regime_char_reading = classify_regime_character(
+        spy_20d_return=spy_20d_return,
+        vix_level=vix_val,
+        vix_20d_change=vix_20d_change,
+        breadth_zscore=bz,
+        breadth_zscore_change_5d=breadth_zscore_change_5d,
+        cross_sector_dispersion=0.0,  # Updated after RS computed
+        correlation_zscore=corr_z if not np.isnan(corr_z) else 0.0,
+        credit_zscore=credit_z,
+        gold_divergence_active=(gd_reading.is_margin_call_regime if gd_reading else False),
+        gate_level=regime.state,
+    )
+
     # Catalyst Gate (between regime and state classifier)
     catalysts = load_catalyst_calendar()
     today_str = prices.index[-1].strftime("%Y-%m-%d")
@@ -233,6 +271,32 @@ def run_pipeline():
     available_industries = [i for i in industries_cfg if i["ticker"] in prices.columns]
     industry_rs_readings = compute_industry_rs(prices, available_industries) if available_industries else []
 
+    # Horizon Patterns (Phase 4) — after all RS computed
+    from engine.horizon_patterns import classify_all_horizon_patterns
+    horizon_readings = classify_all_horizon_patterns(
+        rs_readings, industry_rs_readings,
+        near_zero_threshold=settings.get("horizon", {}).get("near_zero_threshold", 0.003),
+    )
+    # Extract just the pattern enums for the state classifier
+    horizon_pattern_map = {t: hr.pattern for t, hr in horizon_readings.items()}
+
+    # Update cross-sector dispersion now that RS is available
+    sector_20d_returns = {r.ticker: r.rs_20d for r in rs_readings}
+    dispersion = compute_cross_sector_dispersion(sector_20d_returns)
+    # Re-classify regime character with actual dispersion
+    regime_char_reading = classify_regime_character(
+        spy_20d_return=spy_20d_return,
+        vix_level=vix_val,
+        vix_20d_change=vix_20d_change,
+        breadth_zscore=bz,
+        breadth_zscore_change_5d=breadth_zscore_change_5d,
+        cross_sector_dispersion=dispersion,
+        correlation_zscore=corr_z if not np.isnan(corr_z) else 0.0,
+        credit_zscore=credit_z,
+        gold_divergence_active=(gd_reading.is_margin_call_regime if gd_reading else False),
+        gate_level=regime.state,
+    )
+
     # Compute industry pump score history for real deltas (same pattern as sectors)
     ind_score_history = {ir.ticker: [] for ir in industry_rs_readings}
     for i in range(max(0, len(prices) - lookback), len(prices)):
@@ -310,11 +374,13 @@ def run_pipeline():
         concentrations=concentration_map,
         catalyst_confidence_modifier=catalyst_assessment.confidence_modifier,
         rs_values=rs_vals,
+        horizon_patterns=horizon_pattern_map,
     )
 
     # Industry states from multi-timeframe RS pattern
     industry_states = classify_all_industries(
         industry_rs_readings, regime=regime.state, reversal_scores=reversal_map,
+        horizon_patterns=horizon_pattern_map,
     )
     # Merge industry states into the main states dict
     states.update(industry_states)
@@ -328,6 +394,7 @@ def run_pipeline():
         states=states, pumps=pumps, regime=regime.state,
         catalyst=catalyst_assessment, rs_ranks=all_ranks_for_trade,
         reversal_scores=reversal_map, concentrations=concentration_map,
+        regime_character=regime_char_reading.character,
     )
 
     return {
@@ -355,6 +422,8 @@ def run_pipeline():
         "gold_silver_reading": gs_reading,
         "gold_divergence_reading": gd_reading,
         "correlation_reading": corr_reading,
+        "horizon_readings": horizon_readings,
+        "regime_character": regime_char_reading,
     }
 
 

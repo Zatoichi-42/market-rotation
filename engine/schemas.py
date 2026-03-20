@@ -414,3 +414,168 @@ class GoldDivergenceReading:
     is_margin_call_regime: bool
     level: SignalLevel
     description: str
+
+
+# ── Cross-Horizon Divergence Patterns (Phase 4) ────
+
+class HorizonPattern(Enum):
+    FULL_CONFIRM = "Full Confirm"       # ↑↑↑
+    ROTATION_IN = "Rotation In"         # ↑↑↓
+    ROTATION_OUT = "Rotation Out"       # ↓↓↑
+    FULL_REJECT = "Full Reject"         # ↓↓↓
+    DEAD_CAT = "Dead Cat"              # ↑↓↓
+    HEALTHY_DIP = "Healthy Dip"        # ↓↑↑
+    NO_PATTERN = "No Pattern"          # mixed / unclear
+
+
+@dataclass
+class HorizonReading:
+    ticker: str
+    name: str
+    pattern: HorizonPattern
+    rs_5d: float
+    rs_20d: float
+    rs_60d: float
+    rs_5d_sign: str                    # "+" or "-" or "~" (near zero)
+    rs_20d_sign: str
+    rs_60d_sign: str
+    conviction: int                    # 0-100
+    description: str
+    is_rotation_signal: bool           # True for ROTATION_IN or ROTATION_OUT
+    is_trap: bool                      # True for DEAD_CAT
+    is_entry_zone: bool                # True for HEALTHY_DIP
+
+
+# ── Regime Character (Phase 4) ────────────────────
+
+class RegimeCharacter(Enum):
+    TRENDING_BULL = "Trending Bull"
+    TRENDING_BEAR = "Trending Bear"
+    CHOPPY = "Choppy"
+    CRISIS = "Crisis"
+    RECOVERY = "Recovery"
+    ROTATION = "Rotation"
+
+
+@dataclass
+class RegimeCharacterReading:
+    character: RegimeCharacter
+    gate_level: RegimeState
+    confidence: int
+    spy_20d_return: float
+    cross_sector_dispersion: float
+    breadth_trend: str                 # "improving" / "stable" / "deteriorating"
+    vix_trend: str                     # "declining" / "stable" / "rising"
+    prior_character: Optional[RegimeCharacter]
+    sessions_in_character: int
+    description: str
+
+
+# ── Exit Monitor (Phase 4) ────────────────────────
+
+class ExitSignalType(Enum):
+    DELTA_DECEL = "Delta Deceleration"
+    REVERSAL_EROSION = "Reversal Score Erosion"
+    BREADTH_NARROWING = "Breadth Narrowing"
+    VOLUME_CLIMAX = "Volume Climax Without Follow-Through"
+    FAILED_BREAKOUTS = "Failed Breakout Rate Rising"
+    HORIZON_FLIP = "Cross-Horizon Flip"
+    RELATIVE_STOP = "Relative Stop Hit"
+
+
+class ExitUrgency(Enum):
+    WATCH = "Watch"
+    WARNING = "Warning"
+    ALERT = "Alert"
+    IMMEDIATE = "Immediate"
+
+
+@dataclass
+class ExitSignal:
+    signal_type: ExitSignalType
+    ticker: str
+    urgency: ExitUrgency
+    sessions_active: int
+    value: float
+    threshold: float
+    description: str
+
+
+@dataclass
+class ExitAssessment:
+    ticker: str
+    signals: list[ExitSignal]
+    urgency: ExitUrgency
+    recommendation: str
+    description: str
+
+
+# ── Position Tracker (Phase 4) ────────────────────
+
+@dataclass
+class PositionEntrySnapshot:
+    position_id: str
+    ticker: str
+    name: str
+    entry_date: str
+    entry_price: float
+    entry_analysis_state: AnalysisState
+    entry_trade_state: TradeState
+    entry_regime_gate: RegimeState
+    entry_regime_character: RegimeCharacter
+    entry_horizon_pattern: HorizonPattern
+    entry_pump_score: float
+    entry_pump_delta: float
+    entry_reversal_score: float
+    entry_reversal_percentile: float
+    entry_confidence: int
+    entry_rs_5d: float
+    entry_rs_20d: float
+    entry_rs_60d: float
+    entry_rs_rank: int
+    expected_hold_sessions: int
+    invalidation_condition: str
+
+
+@dataclass
+class PositionLiveState:
+    position_id: str
+    ticker: str
+    current_date: str
+    sessions_held: int
+    current_price: float
+    unrealized_pnl_pct: float
+    peak_rs_20d_since_entry: float
+    peak_pump_score_since_entry: float
+    rs_decline_from_peak: float
+    pump_decline_from_peak: float
+    reversal_score_change: float
+    confidence_change: int
+    delta_decel_sessions: int
+    exit_assessment: Optional[ExitAssessment]
+    entry_horizon: HorizonPattern
+    current_horizon: HorizonPattern
+    horizon_changed: bool
+
+
+@dataclass
+class PositionExitRecord:
+    position_id: str
+    ticker: str
+    entry_date: str
+    exit_date: str
+    sessions_held: int
+    entry_price: float
+    exit_price: float
+    pnl_pct: float
+    rs_vs_spy_during_hold: float
+    exit_reason: str
+    exit_signals_at_close: list[str]
+    entry_quality: str
+    exit_quality: str
+    state_was_correct: bool
+    entry_pump_score: float
+    exit_pump_score: float
+    entry_reversal_score: float
+    exit_reversal_score: float
+    lesson_tags: list[str]

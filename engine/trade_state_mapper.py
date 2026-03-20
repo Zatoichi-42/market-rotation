@@ -13,6 +13,7 @@ from engine.schemas import (
     AnalysisState, RegimeState, TradeState, TradeStateAssignment,
     CatalystAction, CatalystAssessment,
     PumpScoreReading, ReversalScoreReading, StateClassification,
+    RegimeCharacter, ExitAssessment, ExitUrgency,
 )
 
 
@@ -24,6 +25,8 @@ def map_trade_state(
     reversal: ReversalScoreReading | None = None,
     concentration=None,
     rs_rank: int = 6,
+    regime_character: RegimeCharacter | None = None,
+    exit_assessment: ExitAssessment | None = None,
 ) -> TradeStateAssignment:
     """Map one sector's signals to a trade state. First match wins."""
     ticker = state.ticker
@@ -33,6 +36,13 @@ def map_trade_state(
     delta = pump.pump_delta
     delta_5d = pump.pump_delta_5d_avg
     catalyst_note = catalyst.action.value if catalyst else "Clear"
+
+    # ── 0. Exit assessment override ──
+    if exit_assessment and exit_assessment.recommendation == "Exit":
+        return _build(ticker, name, analysis, TradeState.REDUCE, confidence,
+                      "—", "Exit signals cleared",
+                      "—", catalyst_note,
+                      f"EXIT override: {exit_assessment.description}")
 
     # ── 1. HOSTILE → Hedge ──
     if regime == RegimeState.HOSTILE:
@@ -51,8 +61,12 @@ def map_trade_state(
                       "—", "—", "—", catalyst_note,
                       f"EMBARGO ({catalyst.scheduled_catalyst}). No entries until event passes.")
 
-    # ── Size multiplier for FRAGILE ──
+    # ── Size multiplier for FRAGILE + regime character ──
     regime_size = "0.5x (FRAGILE)" if regime == RegimeState.FRAGILE else "1.0x"
+    if regime_character == RegimeCharacter.CHOPPY:
+        regime_size = "0.5x (CHOPPY)" if regime_size == "1.0x" else regime_size
+    elif regime_character == RegimeCharacter.ROTATION:
+        regime_size = "0.5x (ROTATION)" if regime_size == "1.0x" else regime_size
 
     # ── 3. Ambiguous → No Trade ──
     if analysis == AnalysisState.AMBIGUOUS:
@@ -160,6 +174,8 @@ def map_all_trade_states(
     rs_ranks: dict[str, int],
     reversal_scores: dict | None = None,
     concentrations: dict | None = None,
+    regime_character: RegimeCharacter | None = None,
+    exit_assessments: dict[str, ExitAssessment] | None = None,
 ) -> dict[str, TradeStateAssignment]:
     """Map all sectors/industries to trade states."""
     results = {}
@@ -169,9 +185,11 @@ def map_all_trade_states(
             continue
         rev = reversal_scores.get(ticker) if reversal_scores else None
         conc = concentrations.get(ticker) if concentrations else None
+        ea = exit_assessments.get(ticker) if exit_assessments else None
         results[ticker] = map_trade_state(
             state=st, pump=pump, regime=regime, catalyst=catalyst,
             reversal=rev, concentration=conc, rs_rank=rs_ranks.get(ticker, 6),
+            regime_character=regime_character, exit_assessment=ea,
         )
     return results
 

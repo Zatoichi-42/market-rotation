@@ -20,6 +20,7 @@ Confidence floors enforce minimum confidence per state.
 from engine.schemas import (
     AnalysisState, TransitionPressure, RegimeState,
     StateClassification, PumpScoreReading, ReversalScoreReading,
+    HorizonPattern,
 )
 from engine.explain import explain_state
 
@@ -63,6 +64,7 @@ def classify_state(
     rs_5d: float = 0.0,
     rs_20d: float = 0.0,
     rs_60d: float = 0.0,
+    horizon_pattern: HorizonPattern | None = None,
 ) -> StateClassification:
     """Classify a single sector/group's analysis state using 7-state architecture."""
     ticker = pump.ticker
@@ -72,7 +74,8 @@ def classify_state(
     state = _determine_state(pump, prior, rs_rank, pump_percentile, delta_history,
                              settings, reversal_score=reversal_score,
                              concentration=concentration, total_groups=total_groups,
-                             rs_5d=rs_5d, rs_20d=rs_20d, rs_60d=rs_60d)
+                             rs_5d=rs_5d, rs_20d=rs_20d, rs_60d=rs_60d,
+                             horizon_pattern=horizon_pattern)
 
     # Track sessions
     if prior and state == prior.state:
@@ -88,7 +91,8 @@ def classify_state(
                                       delta_history, state,
                                       reversal_score=reversal_score,
                                       concentration=concentration,
-                                      catalyst_confidence_modifier=catalyst_confidence_modifier)
+                                      catalyst_confidence_modifier=catalyst_confidence_modifier,
+                                      horizon_pattern=horizon_pattern)
 
     # Apply confidence floors — downgrade if below minimum
     state, confidence = _apply_confidence_floors(state, confidence)
@@ -115,6 +119,7 @@ def classify_all_sectors(
     concentrations: dict | None = None,
     catalyst_confidence_modifier: int = 0,
     rs_values: dict[str, tuple[float, float, float]] | None = None,
+    horizon_patterns: dict[str, HorizonPattern] | None = None,
 ) -> dict[str, StateClassification]:
     """Classify all sectors. Returns dict[ticker, StateClassification]."""
     results = {}
@@ -130,6 +135,10 @@ def classify_all_sectors(
         if rs_values and ticker in rs_values:
             rs_5d_val, rs_20d_val, rs_60d_val = rs_values[ticker]
 
+        hp = None
+        if horizon_patterns and ticker in horizon_patterns:
+            hp = horizon_patterns[ticker]
+
         results[ticker] = classify_state(
             pump=pump, prior=prior, regime=regime,
             rs_rank=rank, pump_percentile=pctl,
@@ -137,6 +146,7 @@ def classify_all_sectors(
             reversal_score=rev, concentration=conc,
             catalyst_confidence_modifier=catalyst_confidence_modifier,
             rs_5d=rs_5d_val, rs_20d=rs_20d_val, rs_60d=rs_60d_val,
+            horizon_pattern=hp,
         )
     return results
 
@@ -158,6 +168,7 @@ def _determine_state(
     rs_5d: float = 0.0,
     rs_20d: float = 0.0,
     rs_60d: float = 0.0,
+    horizon_pattern: HorizonPattern | None = None,
 ) -> AnalysisState:
     """Core 7-state classification. Order is critical."""
     score = pump.pump_score
@@ -204,6 +215,11 @@ def _determine_state(
 
     if rev_pctl > 75 and delta > _DELTA_NEAR_ZERO and delta_5d < -_DELTA_NEAR_ZERO:
         return AnalysisState.AMBIGUOUS
+
+    # ── VETO: Horizon pattern overrides ──
+    # DEAD_CAT (↑↓↓) and FULL_REJECT (↓↓↓) block all bullish states
+    _bullish_blocked = (horizon_pattern is not None and horizon_pattern in (
+        HorizonPattern.DEAD_CAT, HorizonPattern.FULL_REJECT))
 
     # ── Forced exit from Ambiguous at max duration ──
     if prior_state == AnalysisState.AMBIGUOUS and prior_sessions >= max_ambiguous:
@@ -283,7 +299,8 @@ def _determine_state(
     min_broad_sessions = settings.get("broadening", {}).get("rs_delta_positive_sessions", 5)
     if (consec_positive >= min_broad_sessions
             and pump_percentile > 50
-            and rev_pctl < 75):
+            and rev_pctl < 75
+            and not _bullish_blocked):
         return AnalysisState.BROADENING
 
     # ── STEP 6b: SUSTAINED LEADER ──
@@ -292,18 +309,21 @@ def _determine_state(
             and pump_percentile >= 80
             and rs_60d > 0.10
             and rev_pctl < 75
-            and consec_negative < 3):
+            and consec_negative < 3
+            and not _bullish_blocked):
         return AnalysisState.BROADENING
 
     # ── STEP 7: ACCUMULATION ──
     if (delta > _DELTA_NEAR_ZERO
             and delta_5d > 0
             and rev_pctl < 75
-            and not all_rs_negative):
+            and not all_rs_negative
+            and not _bullish_blocked):
         return AnalysisState.ACCUMULATION
 
     # Simple positive delta (weaker signal)
-    if delta > _DELTA_NEAR_ZERO and rev_pctl < 75 and not all_rs_negative:
+    if (delta > _DELTA_NEAR_ZERO and rev_pctl < 75
+            and not all_rs_negative and not _bullish_blocked):
         return AnalysisState.ACCUMULATION
 
     # Negative delta without hitting Distribution thresholds
@@ -363,6 +383,7 @@ def _compute_confidence(
     reversal_score: ReversalScoreReading | None = None,
     concentration=None,
     catalyst_confidence_modifier: int = 0,
+    horizon_pattern: HorizonPattern | None = None,
 ) -> int:
     confidence = 60
 
@@ -414,6 +435,19 @@ def _compute_confidence(
         confidence += concentration.participation_modifier
 
     confidence += catalyst_confidence_modifier
+
+    # Horizon pattern confidence modifiers
+    if horizon_pattern is not None:
+        bullish = state in (AnalysisState.ACCUMULATION, AnalysisState.BROADENING, AnalysisState.OVERT_PUMP)
+        bearish = state in (AnalysisState.DISTRIBUTION, AnalysisState.EXHAUSTION, AnalysisState.OVERT_DUMP)
+        if horizon_pattern == HorizonPattern.FULL_CONFIRM and bullish:
+            confidence += 10
+        elif horizon_pattern == HorizonPattern.FULL_REJECT and bearish:
+            confidence += 10
+        elif horizon_pattern == HorizonPattern.ROTATION_IN and bullish:
+            confidence += 5
+        elif horizon_pattern == HorizonPattern.ROTATION_OUT and bearish:
+            confidence += 5
 
     if regime == RegimeState.HOSTILE:
         confidence -= 25

@@ -14,6 +14,7 @@ Pattern logic:
 from engine.schemas import (
     AnalysisState, TransitionPressure, StateClassification,
     IndustryRSReading, ReversalScoreReading, RegimeState,
+    HorizonPattern,
 )
 
 
@@ -22,6 +23,7 @@ def classify_industry_state(
     regime: RegimeState = RegimeState.NORMAL,
     reversal_score: ReversalScoreReading | None = None,
     prior: StateClassification | None = None,
+    horizon_pattern: HorizonPattern | None = None,
 ) -> StateClassification:
     """
     Classify an industry's state from its multi-timeframe RS pattern.
@@ -41,12 +43,16 @@ def classify_industry_state(
     # Check vs-parent: if underperforming parent by >5% on 20d, not truly driving sector
     vs_parent_ok = ir.rs_20d_vs_parent > -0.05
 
+    # DEAD_CAT and FULL_REJECT horizon patterns block bullish states
+    _bullish_blocked = (horizon_pattern is not None and horizon_pattern in (
+        HorizonPattern.DEAD_CAT, HorizonPattern.FULL_REJECT))
+
     # Determine state from RS pattern (7-state)
-    if tf_pos >= 2 and slope > 0.001 and rank <= 5 and composite >= 70 and vs_parent_ok:
+    if tf_pos >= 2 and slope > 0.001 and rank <= 5 and composite >= 70 and vs_parent_ok and not _bullish_blocked:
         state = AnalysisState.OVERT_PUMP
-    elif tf_pos >= 2 and slope > 0.001 and not all_rs_neg:
+    elif tf_pos >= 2 and slope > 0.001 and not all_rs_neg and not _bullish_blocked:
         state = AnalysisState.BROADENING
-    elif (slope > 0.001 or rs_5d > 0.001) and not all_rs_neg:
+    elif (slope > 0.001 or rs_5d > 0.001) and not all_rs_neg and not _bullish_blocked:
         state = AnalysisState.ACCUMULATION
     elif rs_60d > 0.005 and (slope < -0.001 or rs_5d < -0.001):
         # Was strong (60d positive) but short-term weakening
@@ -124,11 +130,13 @@ def classify_all_industries(
     regime: RegimeState = RegimeState.NORMAL,
     reversal_scores: dict | None = None,
     priors: dict | None = None,
+    horizon_patterns: dict[str, HorizonPattern] | None = None,
 ) -> dict[str, StateClassification]:
     """Classify all industries. Returns {ticker: StateClassification}."""
     results = {}
     for ir in industry_rs:
         rev = reversal_scores.get(ir.ticker) if reversal_scores else None
         prior = priors.get(ir.ticker) if priors else None
-        results[ir.ticker] = classify_industry_state(ir, regime, rev, prior)
+        hp = horizon_patterns.get(ir.ticker) if horizon_patterns else None
+        results[ir.ticker] = classify_industry_state(ir, regime, rev, prior, hp)
     return results

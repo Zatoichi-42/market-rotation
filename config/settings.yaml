@@ -158,6 +158,46 @@ gold_silver_ratio:
   fragile_zscore: 1.0
   hostile_zscore: 2.0
 
+# Cross-Horizon Divergence
+horizon:
+  near_zero_threshold: 0.003      # ±0.3% RS treated as flat
+  conviction_high: 0.15           # Sum of |confirming RS| for high conviction
+  conviction_mid: 0.05
+  dead_cat_vetoes_accumulation: true
+
+# Regime Character
+regime_character:
+  spy_trend_threshold: 0.02       # SPY 20d return > ±2% for trending
+  vix_bull_max: 22                # VIX < this for trending bull
+  vix_bear_min: 18                # VIX > this for trending bear
+  dispersion_high_pctl: 75        # Cross-sector dispersion > this percentile = rotation
+  persistence_sessions: 3         # Sessions to confirm character change
+  instability_window: 15          # If 3+ character changes in this window → CHOPPY
+
+# Exit Monitor
+exit:
+  delta_decel_sessions: 3
+  reversal_erosion_threshold: 0.15
+  volume_climax_rvol: 2.0
+  volume_no_follow_through_pct: 0.003
+  failed_breakout_warning: 0.60
+  failed_breakout_alert: 0.70
+  relative_stop_warning: 0.05
+  relative_stop_alert: 0.08
+  relative_stop_immediate: 0.12
+  signals_to_tighten: 2
+  signals_to_reduce: 3
+  signals_to_exit: 4
+  choppy_threshold_reduction: 1
+  trending_bull_threshold_increase: 1
+
+# Position Tracker
+positions:
+  storage_path: "data/store/positions"
+  max_open_positions: 6
+  peak_tracking: true
+  delta_decel_window: 10
+
 # Concentration Monitor (Gap Fix 4)
 concentration:
   # Number of leaders to track per sector

@@ -141,6 +141,29 @@ def render_regime_panel(result: dict):
             unsafe_allow_html=True,
         )
 
+    # ── Regime Character ──────────────────────────────
+    regime_char = result.get("regime_character")
+    if regime_char is not None:
+        char_colors = {
+            "Trending Bull": "#16a34a",
+            "Trending Bear": "#dc2626",
+            "Choppy": "#f59e0b",
+            "Crisis": "#7f1d1d",
+            "Recovery": "#2563eb",
+            "Rotation": "#a855f7",
+        }
+        char_color = char_colors.get(regime_char.character.value, "#6b7280")
+        st.markdown(
+            f"<div style='padding:10px;background:rgba(0,0,0,0.2);border-radius:6px;margin-bottom:12px;'>"
+            f"<b>Character:</b> "
+            f"<span style='color:{char_color};font-weight:bold;font-size:1.1em;'>"
+            f"{regime_char.character.value}</span>"
+            f" (confidence: {regime_char.confidence}%)<br>"
+            f"<span style='font-size:0.9em;'>&rarr; {regime_char.description}</span>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
     # ── Gold/Silver Ratio Modifier ────────────────────
     gs_reading = result.get("gold_silver_reading")
     if gs_reading is not None:

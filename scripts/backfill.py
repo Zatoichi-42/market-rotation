@@ -157,6 +157,11 @@ def compute_snapshots(prices, volumes, vix, vix3m, settings, min_warmup=60):
                     pump_score=score, pump_delta=delta, pump_delta_5d_avg=d5,
                 )
 
+            # Horizon Patterns (Phase 4)
+            from engine.horizon_patterns import classify_all_horizon_patterns
+            horizon_readings = classify_all_horizon_patterns(rs_readings)
+            horizon_pattern_map = {t: hr.pattern for t, hr in horizon_readings.items()}
+
             # State Classifier
             rs_ranks = {r.ticker: r.rs_rank for r in rs_readings}
             pump_pcts = percentile_rank(pd.Series({t: p.pump_score for t, p in pumps.items()}))
@@ -167,6 +172,7 @@ def compute_snapshots(prices, volumes, vix, vix3m, settings, min_warmup=60):
                 delta_histories={t: delta_histories[t][-10:] for t in SECTOR_TICKERS},
                 settings=settings["state"],
                 rs_values=rs_vals,
+                horizon_patterns=horizon_pattern_map,
             )
 
             # Save snapshot

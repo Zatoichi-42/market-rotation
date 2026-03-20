@@ -258,6 +258,19 @@ def _build_claude_xml(result: dict) -> str:
     L.append(f'    <explanation>{X(regime.explanation)}</explanation>')
     L.append('  </regime>')
 
+    # ── Regime Character ──
+    regime_char = result.get("regime_character")
+    if regime_char is not None:
+        L.append(f'  <regime_character character="{X(regime_char.character.value)}" '
+                 f'gate_level="{regime_char.gate_level}" confidence="{regime_char.confidence}" '
+                 f'spy_20d_return="{regime_char.spy_20d_return:.6f}" '
+                 f'cross_sector_dispersion="{regime_char.cross_sector_dispersion:.6f}" '
+                 f'breadth_trend="{X(regime_char.breadth_trend)}" '
+                 f'vix_trend="{X(regime_char.vix_trend)}" '
+                 f'prior_character="{X(regime_char.prior_character)}" '
+                 f'sessions_in_character="{regime_char.sessions_in_character}" '
+                 f'description="{X(regime_char.description)}"/>')
+
     # ── VIX Detail ──
     if vix is not None and len(vix) >= 2:
         vix_1d = vix.iloc[-1] - vix.iloc[-2]
@@ -298,21 +311,26 @@ def _build_claude_xml(result: dict) -> str:
     for r in rs_readings:
         state = states.get(r.ticker)
         sv = state.state.value if state else "—"
+        horizon = horizon_readings.get(r.ticker)
+        hz_attr = f' horizon="{X(horizon.pattern.value)}"' if horizon else ''
         L.append(f'    <row ticker="{r.ticker}" name="{X(r.name)}" '
                  f'rs_5d="{r.rs_5d*100:+.1f}%" color_5d="{_rs_color_word(r.rs_5d)}" '
                  f'rs_20d="{r.rs_20d*100:+.1f}%" color_20d="{_rs_color_word(r.rs_20d)}" '
                  f'rs_60d="{r.rs_60d*100:+.1f}%" color_60d="{_rs_color_word(r.rs_60d)}" '
-                 f'state="{sv}"/>')
+                 f'state="{sv}"{hz_attr}/>')
     L.append('  </sector_heatmap>')
 
     # ── Sectors ──
+    horizon_readings = result.get("horizon_readings", {})
     L.append('  <sectors>')
     for r in rs_readings:
         state = states.get(r.ticker)
         pump = pumps.get(r.ticker)
         rev = rev_map.get(r.ticker)
         trend = _trend_description(prices, r.ticker)
-        L.append(f'    <sector ticker="{r.ticker}" name="{X(r.name)}" rank="{r.rs_rank}">')
+        horizon = horizon_readings.get(r.ticker)
+        horizon_attr = f' horizon="{X(horizon.pattern.value)}"' if horizon else ''
+        L.append(f'    <sector ticker="{r.ticker}" name="{X(r.name)}" rank="{r.rs_rank}"{horizon_attr}>')
         L.append(f'      <rs rs_5d="{r.rs_5d:.6f}" rs_20d="{r.rs_20d:.6f}" rs_60d="{r.rs_60d:.6f}" '
                  f'slope="{r.rs_slope:.6f}" composite="{r.rs_composite:.2f}"/>')
         L.append(f'      <sparkline_trend description="20d RS sparkline over 60 trading days: {trend}"/>')
@@ -496,6 +514,13 @@ def _build_markdown(result: dict) -> str:
         L.append(f"| {sig.name} | {sig.raw_value:.2f} | {sig.level.value} |")
     L.append("")
 
+    # Regime Character
+    regime_char = result.get("regime_character")
+    if regime_char is not None:
+        L.append(f"**Character:** {regime_char.character.value} (confidence: {regime_char.confidence}%)")
+        L.append(f"> {regime_char.description}")
+        L.append("")
+
     # VIX
     vix = result.get("vix")
     vix3m = result.get("vix3m")
@@ -530,10 +555,11 @@ def _build_markdown(result: dict) -> str:
     L.append("")
 
     # Sector Rankings
+    horizon_readings = result.get("horizon_readings", {})
     L.append("## Sector Rankings")
     L.append("")
-    L.append("| Rank | Sector | 20d Trend | RS 5d | RS 20d | RS 60d | Slope | Comp | Pump | Delta | Rev | State | Conf |")
-    L.append("|------|--------|-----------|-------|--------|--------|-------|------|------|-------|-----|-------|------|")
+    L.append("| Rank | Sector | 20d Trend | RS 5d | RS 20d | RS 60d | Slope | Comp | Pump | Delta | Rev | State | Conf | Pattern |")
+    L.append("|------|--------|-----------|-------|--------|--------|-------|------|------|-------|-----|-------|------|---------|")
     for r in rs_readings:
         state = states.get(r.ticker)
         pump = pumps.get(r.ticker)
@@ -544,9 +570,11 @@ def _build_markdown(result: dict) -> str:
         ps = f"{pump.pump_score:.2f}" if pump else "—"
         pd_v = f"{pump.pump_delta:+.3f}" if pump else "—"
         rv_s = f"{rev.reversal_score:.2f}" if rev else "—"
+        horizon = horizon_readings.get(r.ticker)
+        hz = horizon.pattern.value if horizon else "—"
         L.append(f"| #{r.rs_rank} | {r.ticker} ({r.name}) | {trend} | "
                  f"{r.rs_5d:+.2%} | {r.rs_20d:+.2%} | {r.rs_60d:+.2%} | "
-                 f"{r.rs_slope:+.4f} | {r.rs_composite:.0f} | {ps} | {pd_v} | {rv_s} | {sv} | {sc} |")
+                 f"{r.rs_slope:+.4f} | {r.rs_composite:.0f} | {ps} | {pd_v} | {rv_s} | {sv} | {sc} | {hz} |")
     L.append("")
 
     # Industries
@@ -729,6 +757,18 @@ def _build_json(result: dict) -> str:
                         for s in regime.signals],
             "explanation": regime.explanation,
         },
+        "regime_character": (lambda rc: {
+            "character": rc.character.value,
+            "gate_level": rc.gate_level,
+            "confidence": rc.confidence,
+            "spy_20d_return": rc.spy_20d_return,
+            "cross_sector_dispersion": rc.cross_sector_dispersion,
+            "breadth_trend": rc.breadth_trend,
+            "vix_trend": rc.vix_trend,
+            "prior_character": rc.prior_character,
+            "sessions_in_character": rc.sessions_in_character,
+            "description": rc.description,
+        })(result["regime_character"]) if result.get("regime_character") is not None else None,
         "breadth": {
             "signal": breadth.signal.value,
             "ratio": breadth.rsp_spy_ratio,
@@ -745,11 +785,13 @@ def _build_json(result: dict) -> str:
         "reversal_diagnostics": [],
     }
 
+    horizon_readings = result.get("horizon_readings", {})
     for r in rs_readings:
         state = states.get(r.ticker)
         pump = pumps.get(r.ticker)
         rev = rev_map.get(r.ticker)
         trend = _trend_description(prices, r.ticker)
+        horizon = horizon_readings.get(r.ticker)
         entry = {
             "rank": r.rs_rank, "ticker": r.ticker, "name": r.name,
             "rs": {"5d": r.rs_5d, "20d": r.rs_20d, "60d": r.rs_60d,
@@ -763,6 +805,12 @@ def _build_json(result: dict) -> str:
             "state": {"value": state.state.value, "confidence": state.confidence,
                       "sessions": state.sessions_in_state,
                       "pressure": state.transition_pressure.value} if state else None,
+            "horizon": {"pattern": horizon.pattern.value,
+                        "conviction": horizon.conviction,
+                        "is_rotation_signal": horizon.is_rotation_signal,
+                        "is_trap": horizon.is_trap,
+                        "is_entry_zone": horizon.is_entry_zone,
+                        "description": horizon.description} if horizon else None,
         }
         data["sectors"].append(entry)
         data["sector_heatmap"].append({
@@ -771,6 +819,7 @@ def _build_json(result: dict) -> str:
             "20d": {"value": r.rs_20d, "color": _rs_color_word(r.rs_20d)},
             "60d": {"value": r.rs_60d, "color": _rs_color_word(r.rs_60d)},
             "state": state.state.value if state else None,
+            "horizon": horizon.pattern.value if horizon else None,
         })
 
     for ir in industry_rs:

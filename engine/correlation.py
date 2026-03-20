@@ -131,3 +131,16 @@ def _find_extreme_pairs(corr_matrix: pd.DataFrame, tickers: list) -> tuple:
                 min_pair = (tickers[i], tickers[j])
 
     return max_pair, min_pair
+
+
+def compute_cross_sector_dispersion(sector_returns_20d: dict[str, float]) -> float:
+    """
+    Return std dev of 20-day returns across sectors.
+
+    If fewer than 3 values are provided, returns 0.0 — there is not enough
+    data for a meaningful dispersion measure.
+    """
+    values = list(sector_returns_20d.values())
+    if len(values) < 3:
+        return 0.0
+    return float(np.std(values))

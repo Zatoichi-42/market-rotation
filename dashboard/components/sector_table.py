@@ -3,6 +3,7 @@ import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
 from engine.schemas import AnalysisState
+from dashboard.components.horizon_col import get_horizon_label
 
 _GLOSSARY = {
     "rank": {"title": "RS Rank (1–11)", "body": "Cross-sectional rank based on 20d RS. 1 = strongest."},
@@ -107,11 +108,15 @@ def render_sector_table(result: dict):
         arrow = compute_arrow(pump_delta, delta_prior=pump_delta_5d, rank_change=r.rs_rank_change)
         arrow_sym = arrow_symbol(arrow)
 
+        # Horizon pattern
+        horizon = result.get("horizon_readings", {}).get(r.ticker)
+        pattern_label = get_horizon_label(horizon.pattern) if horizon else "—"
+
         row.update({"Pump": f"{pump_score:.2f}", "Δ": f"{arrow_sym} {pump_delta:+.3f}",
                      "Rev": rev_str, "Rev %ile": rev_pct,
                      "Conc": conc_str,
                      "State": state_val, "Trade": trade_val, "Size": size_val,
-                     "Conf": f"{state_conf}%"})
+                     "Conf": f"{state_conf}%", "Pattern": pattern_label})
         rows.append(row)
 
     df = pd.DataFrame(rows)
