@@ -67,7 +67,7 @@ def render_interpretation_panel(result: dict):
 
     # ── Sector 1d Waterfall ───────────────────────────
     st.subheader("Sector 1d RS Waterfall")
-    st.caption("Green = outperformed SPY today, Red = underperformed. Size = magnitude.")
+    st.caption("Bar color = Analysis State. Size = 1d RS magnitude vs SPY.")
 
     sector_1d = []
     for r in rs_readings:

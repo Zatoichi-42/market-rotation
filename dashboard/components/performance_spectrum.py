@@ -70,7 +70,7 @@ def _fetch_returns_multi(tickers: tuple) -> dict:
     if not tickers:
         return results
     try:
-        data = yf.download(list(tickers), period="3mo", progress=False)
+        data = yf.download(list(tickers), period="6mo", progress=False)
         if data is None or data.empty:
             return results
         closes = data["Close"] if isinstance(data.columns, pd.MultiIndex) else data[["Close"]]
@@ -129,10 +129,8 @@ def _render_spectrum_html(rows: list[dict], period: str) -> str:
 
 
 def render_sector_spectrum(result: dict):
-    """Sector spectrum: rows = sectors, cells = industry ETFs, multi-period."""
+    """Sector spectrum: rows = sectors, cells = industry ETFs. All periods shown."""
     st.subheader("Sector Performance Spectrum")
-
-    period = st.selectbox("Period", ["1d", "5d", "20d", "60d"], index=0, key="sec_spec_period")
 
     all_tickers = set()
     for etf, info in _SECTOR_INDUSTRIES.items():
@@ -157,15 +155,15 @@ def render_sector_spectrum(result: dict):
             rows.append({"name": info["name"], "items": items})
 
     if rows:
-        st.caption(f"Sorted by {period} return (best → worst). Each cell = ETF with name.")
-        st.markdown(_render_spectrum_html(rows, period), unsafe_allow_html=True)
+        st.caption("Sorted by return (best → worst). Each cell = ETF with name.")
+        for period in ["1d", "5d", "20d", "60d"]:
+            st.markdown(f"**{period}**")
+            st.markdown(_render_spectrum_html(rows, period), unsafe_allow_html=True)
 
 
 def render_industry_spectrum(result: dict):
-    """Industry spectrum: rows = industry ETFs, cells = top holdings, multi-period."""
+    """Industry spectrum: rows = industry ETFs, cells = top holdings. All periods shown."""
     st.subheader("Industry Performance Spectrum")
-
-    period = st.selectbox("Period", ["1d", "5d", "20d", "60d"], index=0, key="ind_spec_period")
 
     all_tickers = set()
     for info in _INDUSTRY_HOLDINGS.values():
@@ -185,9 +183,10 @@ def render_industry_spectrum(result: dict):
         if items:
             rows.append({"name": f"{ind_etf} ({info['name']})", "items": items})
 
-    # Sort rows by average return for selected period
-    rows.sort(key=lambda r: np.mean([i.get(period, 0) for i in r["items"]]), reverse=True)
-
     if rows:
-        st.caption(f"Sorted by {period} return (best → worst). Each cell = stock with name.")
-        st.markdown(_render_spectrum_html(rows, period), unsafe_allow_html=True)
+        st.caption("Sorted by return (best → worst). Each cell = stock with name.")
+        for period in ["1d", "5d", "20d", "60d"]:
+            # Sort rows by average return for this period
+            rows_sorted = sorted(rows, key=lambda r: np.mean([i.get(period, 0) for i in r["items"]]), reverse=True)
+            st.markdown(f"**{period}**")
+            st.markdown(_render_spectrum_html(rows_sorted, period), unsafe_allow_html=True)
