@@ -430,3 +430,40 @@ class TestClassifyRegimeFromData:
         )
         assert isinstance(result, RegimeAssessment)
         assert result.state in (RegimeState.NORMAL, RegimeState.FRAGILE, RegimeState.HOSTILE)
+
+
+class TestOilSignal:
+    def test_oil_normal(self):
+        sig = classify_signal("oil", 0.5, DEFAULT_THRESHOLDS)
+        assert sig.level == SignalLevel.NORMAL
+
+    def test_oil_fragile(self):
+        sig = classify_signal("oil", 1.8, DEFAULT_THRESHOLDS)
+        assert sig.level == SignalLevel.FRAGILE
+
+    def test_oil_hostile(self):
+        sig = classify_signal("oil", 3.0, DEFAULT_THRESHOLDS)
+        assert sig.level == SignalLevel.HOSTILE
+
+    def test_oil_nan_excluded(self):
+        sig = classify_signal("oil", float("nan"), DEFAULT_THRESHOLDS)
+        assert sig is None
+
+    def test_oil_fragile_boundary(self):
+        sig = classify_signal("oil", 1.5, DEFAULT_THRESHOLDS)
+        assert sig.level == SignalLevel.FRAGILE
+
+    def test_oil_hostile_boundary(self):
+        sig = classify_signal("oil", 2.5, DEFAULT_THRESHOLDS)
+        assert sig.level == SignalLevel.HOSTILE
+
+    def test_gate_with_oil_hostile_adds_to_hostile_count(self):
+        signals = [
+            RegimeSignal("vix", 35.0, SignalLevel.HOSTILE, ""),
+            RegimeSignal("term_structure", 0.90, SignalLevel.NORMAL, ""),
+            RegimeSignal("breadth", 0.5, SignalLevel.NORMAL, ""),
+            RegimeSignal("credit", 0.0, SignalLevel.NORMAL, ""),
+            RegimeSignal("oil", 3.0, SignalLevel.HOSTILE, ""),
+        ]
+        result = classify_regime(signals, DEFAULT_THRESHOLDS)
+        assert result.state == RegimeState.HOSTILE

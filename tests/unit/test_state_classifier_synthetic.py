@@ -402,3 +402,42 @@ class TestClassifyAllSectors:
             delta_histories={"XLK": [0.02] * 5}, settings=SETTINGS,
         )
         assert len(results["XLK"].explanation) > 0
+
+
+class TestMatureHoldLogic:
+    """Tests for the mature hold fix — high score + flat delta != Exhaustion."""
+
+    def test_high_score_flat_delta_top_rank_is_overt_pump(self):
+        """XLE scenario: rank #1, pump pctl 90, delta 0.000 → Overt Pump."""
+        pump = _pump(score=0.70, delta=0.000, delta_5d=0.001)
+        prior = _prior(state=AnalysisState.OVERT_PUMP, sessions=10)
+        result = classify_state(
+            pump=pump, prior=prior, regime=RegimeState.NORMAL,
+            rs_rank=1, pump_percentile=90.0,
+            delta_history=[0.01, 0.005, 0.001, 0.000, 0.000, 0.000],
+            settings=SETTINGS,
+        )
+        assert result.state == AnalysisState.OVERT_PUMP
+
+    def test_high_score_negative_delta_is_exhaustion(self):
+        """When delta is actually negative, Exhaustion is correct."""
+        pump = _pump(score=0.65, delta=-0.02, delta_5d=-0.015)
+        prior = _prior(state=AnalysisState.OVERT_PUMP, sessions=15)
+        result = classify_state(
+            pump=pump, prior=prior, regime=RegimeState.NORMAL,
+            rs_rank=2, pump_percentile=80.0,
+            delta_history=[0.01, 0.005, -0.01, -0.02, -0.02],
+            settings=SETTINGS,
+        )
+        assert result.state == AnalysisState.EXHAUSTION
+
+    def test_mid_rank_flat_delta_is_not_overt_pump(self):
+        """Rank #7 with flat delta — not mature hold."""
+        pump = _pump(score=0.48, delta=0.000, delta_5d=0.000)
+        result = classify_state(
+            pump=pump, prior=None, regime=RegimeState.NORMAL,
+            rs_rank=7, pump_percentile=40.0,
+            delta_history=[0.001, -0.001, 0.000, 0.000, 0.000],
+            settings=SETTINGS,
+        )
+        assert result.state != AnalysisState.OVERT_PUMP

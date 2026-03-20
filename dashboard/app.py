@@ -22,6 +22,8 @@ from engine.industry_rs import compute_industry_rs
 from engine.industry_state import classify_all_industries
 from engine.reversal_score import compute_reversal_scores_batch
 from engine.pump_score import compute_pump_score
+from engine.participation import compute_participation_pillar
+from engine.flow_quality import compute_flow_pillar
 from engine.state_classifier import classify_all_sectors
 from engine.catalyst_gate import load_catalyst_calendar, assess_catalyst
 from engine.concentration_monitor import compute_concentration_all
@@ -78,8 +80,16 @@ def run_pipeline():
     if fred_hy_oas is not None and not fred_hy_oas.empty:
         fred_oas_bps = fred_hy_oas["hy_oas"].dropna().iloc[-1] * 100  # % → bps
 
+    # Oil regime signal
+    oil_ticker = universe.get("commodities", {}).get("oil_wti", "CL=F")
+    oil_z = float("nan")
+    if oil_ticker in prices.columns:
+        oil_series = prices[oil_ticker].dropna()
+        if len(oil_series) > 60:
+            oil_z = compute_zscore(oil_series.iloc[-1], oil_series)
+
     regime = classify_regime_from_data(vix_val, vix3m_val, bz, credit_z, settings["regime"],
-                                       fred_hy_oas_value=fred_oas_bps)
+                                       fred_hy_oas_value=fred_oas_bps, oil_zscore=oil_z)
 
     # Catalyst Gate (between regime and state classifier)
     catalysts = load_catalyst_calendar()
@@ -116,8 +126,15 @@ def run_pipeline():
     score_history = {t: [] for t in SECTOR_NAMES}
     sector_tickers = list(SECTOR_NAMES.keys())
 
+    def _get_sector_children(sector_ticker, univ):
+        return [ind["ticker"] for ind in univ.get("industries", [])
+                if ind.get("parent_sector") == sector_ticker]
+
     for i in range(max(0, len(prices) - lookback), len(prices)):
         day_prices = prices.iloc[:i+1]
+        day_highs = data["highs"].iloc[:i+1]
+        day_lows = data["lows"].iloc[:i+1]
+        day_volumes = data["volumes"].iloc[:i+1]
         if len(day_prices) < 20:
             continue
         day_rs = compute_rs_readings(
@@ -127,7 +144,10 @@ def run_pipeline():
             composite_weights=rs_cfg["composite_weights"],
         )
         for r in day_rs:
-            sc = compute_pump_score(r.rs_composite, 50.0, 50.0, pump_weights)
+            children = _get_sector_children(r.ticker, universe)
+            participation = compute_participation_pillar(day_prices, r.ticker, children)
+            flow = compute_flow_pillar(day_prices, day_highs, day_lows, day_volumes, r.ticker)
+            sc = compute_pump_score(r.rs_composite, participation, flow, pump_weights)
             score_history[r.ticker].append(sc)
 
     # Build current pump scores with real deltas
@@ -135,9 +155,11 @@ def run_pipeline():
     delta_histories = {}
     for r in rs_readings:
         hist = score_history[r.ticker]
-        current_score = hist[-1] if hist else compute_pump_score(r.rs_composite, 50.0, 50.0, pump_weights)
+        children = _get_sector_children(r.ticker, universe)
+        part = compute_participation_pillar(prices, r.ticker, children)
+        flow = compute_flow_pillar(prices, data["highs"], data["lows"], data["volumes"], r.ticker)
+        current_score = hist[-1] if hist else compute_pump_score(r.rs_composite, part, flow, pump_weights)
 
-        # Compute delta sequence
         deltas = []
         for j in range(1, len(hist)):
             deltas.append(hist[j] - hist[j-1])
@@ -149,7 +171,7 @@ def run_pipeline():
 
         pumps[r.ticker] = PumpScoreReading(
             ticker=r.ticker, name=r.name,
-            rs_pillar=r.rs_composite, participation_pillar=50.0, flow_pillar=50.0,
+            rs_pillar=r.rs_composite, participation_pillar=part, flow_pillar=flow,
             pump_score=current_score, pump_delta=delta, pump_delta_5d_avg=delta_5d,
         )
 
@@ -297,6 +319,7 @@ def main():
         # Baton pass alerts + reversal diagnostics on page 1
         from dashboard.components.baton_pass_alert import render_baton_pass_alerts
         render_baton_pass_alerts(result)
+        _render_industry_divergence_alerts(result)
         from dashboard.components.reversal_diagnostics import render_reversal_diagnostics
         render_reversal_diagnostics(result)
 
@@ -331,6 +354,43 @@ def main():
     with tab8:
         from dashboard.components.debug_panel import render_debug_panel
         render_debug_panel(result)
+
+
+def _render_industry_divergence_alerts(result):
+    """Surface cases where industry state contradicts parent sector state."""
+    from engine.schemas import AnalysisState as AS
+    industry_rs = result.get("industry_rs", [])
+    states = result.get("states", {})
+    bullish = {AS.OVERT_PUMP, AS.ACCUMULATION}
+    bearish = {AS.EXHAUSTION, AS.OVERT_DUMP}
+
+    alerts = []
+    for ir in industry_rs:
+        ind_st = states.get(ir.ticker)
+        par_st = states.get(ir.parent_sector)
+        if not ind_st or not par_st:
+            continue
+        if ind_st.state in bullish and par_st.state in bearish:
+            alerts.append(("LEADING", ir, ind_st, par_st))
+        elif ind_st.state in bearish and par_st.state in bullish:
+            alerts.append(("LAGGING", ir, ind_st, par_st))
+
+    if alerts:
+        st.subheader("Industry Divergence Alerts")
+        for typ, ir, ind_st, par_st in alerts[:5]:
+            if typ == "LEADING":
+                st.warning(
+                    f"**{ir.ticker} ({ir.name})** is {ind_st.state.value} "
+                    f"while parent **{ir.parent_sector}** is {par_st.state.value}. "
+                    f"RS vs parent: {ir.rs_20d_vs_parent:+.2%}. "
+                    f"Industry may be the better expression."
+                )
+            else:
+                st.error(
+                    f"**{ir.ticker} ({ir.name})** is {ind_st.state.value} "
+                    f"while parent **{ir.parent_sector}** is {par_st.state.value}. "
+                    f"Industry-specific weakness."
+                )
 
 
 if __name__ == "__main__":

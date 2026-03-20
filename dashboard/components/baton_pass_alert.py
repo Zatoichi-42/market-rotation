@@ -24,11 +24,18 @@ def render_baton_pass_alerts(result: dict):
     for t in sectors:
         p = pumps[t]
         s = states.get(t)
+        # Get RS rank from rs_readings if available
+        rs_rank = 11
+        for rr in result.get("rs_readings", []):
+            if rr.ticker == t:
+                rs_rank = rr.rs_rank
+                break
         sector_data.append({
             "ticker": t, "name": p.name,
             "pump_score": p.pump_score, "pump_delta": p.pump_delta,
             "pump_delta_5d": p.pump_delta_5d_avg,
             "state": s.state.value if s else "—",
+            "rs_rank": rs_rank,
         })
 
     # Sort by pump delta descending
@@ -42,7 +49,7 @@ def render_baton_pass_alerts(result: dict):
     for r in rising:
         for d in declining:
             delta_diff = r["pump_delta"] - d["pump_delta"]
-            if delta_diff >= 0.04:  # Meaningful gap
+            if (delta_diff >= 0.08 and r.get("rs_rank", 11) <= 5 and d.get("rs_rank", 0) >= 4):  # Meaningful gap
                 # Check if confirmed at industry level
                 industry_confirmed = _check_industry_confirmation(
                     r["ticker"], d["ticker"], industry_rs)

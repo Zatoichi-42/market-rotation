@@ -81,6 +81,18 @@ def classify_signal(signal_name: str, value: float, thresholds: dict) -> RegimeS
             level = SignalLevel.NORMAL
             desc = f"Credit z-score {value:.2f} (stable, above {cfg['normal_min_zscore']})"
 
+    elif signal_name == "oil":
+        # Oil z-score: high oil = inflationary pressure = regime stress
+        if value >= 2.5:
+            level = SignalLevel.HOSTILE
+            desc = f"Oil z-score {value:.2f} (extreme, ≥2.5σ above mean)"
+        elif value >= 1.5:
+            level = SignalLevel.FRAGILE
+            desc = f"Oil z-score {value:.2f} (elevated, ≥1.5σ above mean)"
+        else:
+            level = SignalLevel.NORMAL
+            desc = f"Oil z-score {value:.2f} (normal range)"
+
     else:
         raise ValueError(f"Unknown signal name: {signal_name}")
 
@@ -148,17 +160,18 @@ def classify_regime_from_data(
     credit_zscore: float,
     thresholds: dict,
     fred_hy_oas_value: float | None = None,
+    oil_zscore: float = float("nan"),
 ) -> RegimeAssessment:
     """
     Convenience function: classify regime from raw values.
     Handles NaN gracefully by excluding those signals.
-    fred_hy_oas_value: latest FRED HY OAS in bps (optional, for explanation only — lagging).
     """
     signal_inputs = [
         ("vix", vix_current),
         ("term_structure", vix_current / vix3m_current if not math.isnan(vix3m_current) and vix3m_current != 0 else float("nan")),
         ("breadth", breadth_zscore),
         ("credit", credit_zscore),
+        ("oil", oil_zscore),
     ]
 
     signals = []

@@ -184,7 +184,16 @@ def _determine_state(
     if pump_percentile >= min_overt_pctl and rs_rank <= 3 and delta > _DELTA_NEAR_ZERO:
         return AnalysisState.OVERT_PUMP
 
-    # ── OVERT DUMP: via reversal score (Distribution + high reversal) ──
+    # ── OVERT PUMP (MATURE): high score + top rank + flat delta ──
+    # Prevents misclassifying a mature leader as Exhaustion.
+    # A sector at rank ≤3 with pump_percentile ≥70 and delta near zero is holding, not exhausting.
+    if (pump_percentile >= 70
+            and rs_rank <= 3
+            and abs(delta) <= _DELTA_NEAR_ZERO
+            and consec_nonpositive < min_dist_nonpos + 2):
+        return AnalysisState.OVERT_PUMP
+
+    # ── OVERT DUMP: via reversal score (Exhaustion + high reversal) ──
     if (prior_state == AnalysisState.EXHAUSTION
             and reversal_score is not None
             and reversal_score.above_75th):
@@ -195,11 +204,16 @@ def _determine_state(
             and delta < -_DELTA_NEAR_ZERO and rs_rank >= 7):
         return AnalysisState.OVERT_DUMP
 
-    # ── EXHAUSTION: was strong, now fading ──
-    # When concentration is CONCENTRATED_HEALTHY, require reversal confirmation
-    # before allowing Exhaustion (suppress false exhaustion in narrow markets)
+    # ── EXHAUSTION: was strong, now DECLINING (requires negative deltas, not just flat) ──
+    consec_negative = 0
+    for d in reversed(delta_history):
+        if d < -_DELTA_NEAR_ZERO:
+            consec_negative += 1
+        else:
+            break
+
     if (prior_state in (AnalysisState.OVERT_PUMP, AnalysisState.ACCUMULATION)
-            and consec_nonpositive >= min_dist_nonpos):
+            and consec_negative >= min_dist_nonpos):
         if concentration is not None and hasattr(concentration, 'regime'):
             from engine.schemas import ConcentrationRegime
             if concentration.regime == ConcentrationRegime.CONCENTRATED_HEALTHY:

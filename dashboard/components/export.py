@@ -155,7 +155,7 @@ def _get_baton_passes(result):
     for r in rising:
         for d in declining:
             diff = r["delta"] - d["delta"]
-            if diff >= 0.04:
+            if (diff >= 0.08 and r.get("rs_rank", 11) <= 5 and d.get("rs_rank", 0) >= 4):
                 alerts.append(f"{r['ticker']} ({r['name']}) overtaking {d['ticker']} ({d['name']}): "
                               f"delta diff {diff:+.3f}")
     return alerts
