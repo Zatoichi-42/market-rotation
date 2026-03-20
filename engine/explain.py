@@ -32,6 +32,7 @@ _SIGNAL_SOURCES = {
     "term_structure": f"{_SRC_VIX} / {_SRC_VIX3M}",
     "breadth": _SRC_RSP_SPY,
     "credit": _SRC_HYG_LQD,
+    "oil": "CL=F via yfinance — live",
 }
 
 

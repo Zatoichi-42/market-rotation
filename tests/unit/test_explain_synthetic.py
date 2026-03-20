@@ -323,3 +323,17 @@ class TestExplainBreadth:
         result = explain_breadth(br)
         assert isinstance(result, str)
         assert len(result) > 10
+
+
+class TestOilSourceTag:
+    def test_oil_signal_has_source_tag(self):
+        from engine.schemas import RegimeAssessment, RegimeSignal, SignalLevel, RegimeState
+        assessment = RegimeAssessment(
+            state=RegimeState.FRAGILE,
+            signals=[RegimeSignal("oil", 2.93, SignalLevel.HOSTILE, "Oil z-score 2.93")],
+            hostile_count=1, fragile_count=0, normal_count=0,
+            timestamp="2026-03-19T00:00:00Z", explanation="",
+        )
+        explanation = explain_regime(assessment)
+        assert "unknown source" not in explanation.lower()
+        assert "CL=F" in explanation

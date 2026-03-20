@@ -88,9 +88,10 @@ def check_scheduled_catalyst(
         if "ALL" not in cat.affected_sectors and sector_ticker not in cat.affected_sectors:
             continue
 
-        distance = abs((today_date - cat_date).days)
+        days_until = (cat_date - today_date).days  # positive=future, 0=today, negative=past
 
-        if distance <= cat.embargo_sessions:
+        # EMBARGO: day of event and days leading up (within embargo window)
+        if 0 <= days_until <= cat.embargo_sessions:
             if cat.impact == CatalystImpact.HIGH:
                 if _action_priority(CatalystAction.EMBARGO) > _action_priority(best_action):
                     best_action = CatalystAction.EMBARGO
@@ -101,6 +102,13 @@ def check_scheduled_catalyst(
                     best_action = CatalystAction.CAUTION
                     best_name = cat.name
                     best_modifier = -10
+
+        # CAUTION: one day AFTER a HIGH event (settling period)
+        elif days_until == -1 and cat.impact == CatalystImpact.HIGH:
+            if _action_priority(CatalystAction.CAUTION) > _action_priority(best_action):
+                best_action = CatalystAction.CAUTION
+                best_name = f"{cat.name} (post-event)"
+                best_modifier = -10
 
     return best_action, best_name, best_modifier
 

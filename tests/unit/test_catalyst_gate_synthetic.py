@@ -91,3 +91,48 @@ class TestShockDetection:
         prices = self._make_prices(shock_day_returns=shock_rets)
         result = detect_shock(prices, shock_settings=SETTINGS)
         assert result.shock_type in (ShockType.SECTOR_DISLOCATION, ShockType.NONE)
+
+
+class TestEmbargoTiming:
+
+    def test_day_before_fomc_is_embargo(self):
+        from engine.catalyst_gate import load_catalyst_calendar, check_scheduled_catalyst
+        catalysts = load_catalyst_calendar()
+        action, name, _ = check_scheduled_catalyst("2026-03-17", catalysts)
+        assert action == CatalystAction.EMBARGO
+
+    def test_fomc_day_is_embargo(self):
+        from engine.catalyst_gate import load_catalyst_calendar, check_scheduled_catalyst
+        catalysts = load_catalyst_calendar()
+        action, name, _ = check_scheduled_catalyst("2026-03-18", catalysts)
+        assert action == CatalystAction.EMBARGO
+
+    def test_day_after_fomc_is_caution(self):
+        from engine.catalyst_gate import load_catalyst_calendar, check_scheduled_catalyst
+        catalysts = load_catalyst_calendar()
+        action, name, _ = check_scheduled_catalyst("2026-03-19", catalysts)
+        assert action == CatalystAction.CAUTION
+
+    def test_two_days_after_fomc_is_clear(self):
+        from engine.catalyst_gate import load_catalyst_calendar, check_scheduled_catalyst
+        catalysts = load_catalyst_calendar()
+        action, name, _ = check_scheduled_catalyst("2026-03-20", catalysts)
+        assert action == CatalystAction.CLEAR
+
+    def test_day_before_cpi_is_embargo(self):
+        from engine.catalyst_gate import load_catalyst_calendar, check_scheduled_catalyst
+        catalysts = load_catalyst_calendar()
+        action, name, _ = check_scheduled_catalyst("2026-04-09", catalysts)
+        assert action == CatalystAction.EMBARGO
+
+    def test_cpi_day_is_embargo(self):
+        from engine.catalyst_gate import load_catalyst_calendar, check_scheduled_catalyst
+        catalysts = load_catalyst_calendar()
+        action, name, _ = check_scheduled_catalyst("2026-04-10", catalysts)
+        assert action == CatalystAction.EMBARGO
+
+    def test_normal_day_is_clear(self):
+        from engine.catalyst_gate import load_catalyst_calendar, check_scheduled_catalyst
+        catalysts = load_catalyst_calendar()
+        action, _, _ = check_scheduled_catalyst("2026-02-15", catalysts)
+        assert action == CatalystAction.CLEAR

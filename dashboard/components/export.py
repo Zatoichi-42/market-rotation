@@ -142,6 +142,7 @@ def _get_baton_passes(result):
     """Detect baton pass alerts."""
     pumps = result.get("pumps", {})
     states = result.get("states", {})
+    rs_rank_map = {rr.ticker: rr.rs_rank for rr in result.get("rs_readings", [])}
     alerts = []
     sector_data = []
     for t in _SECTOR_NAMES:
@@ -149,7 +150,8 @@ def _get_baton_passes(result):
         s = states.get(t)
         if p:
             sector_data.append({"ticker": t, "name": p.name, "delta": p.pump_delta,
-                                "state": s.state.value if s else "—"})
+                                "state": s.state.value if s else "—",
+                                "rs_rank": rs_rank_map.get(t, 11)})
     rising = [d for d in sector_data if d["delta"] > 0.005]
     declining = [d for d in sector_data if d["delta"] < -0.005]
     for r in rising:
@@ -158,7 +160,7 @@ def _get_baton_passes(result):
             if (diff >= 0.08 and r.get("rs_rank", 11) <= 5 and d.get("rs_rank", 0) >= 4):
                 alerts.append(f"{r['ticker']} ({r['name']}) overtaking {d['ticker']} ({d['name']}): "
                               f"delta diff {diff:+.3f}")
-    return alerts
+    return alerts[:5]
 
 
 def _get_signal_reliability(result):
