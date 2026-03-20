@@ -431,7 +431,7 @@ def _build_claude_xml(result: dict) -> str:
             state = states.get(rv.ticker)
             sv = state.state.value if state else "—"
             subs = rv.sub_signals
-            L.append(f'    <group ticker="{rv.ticker}" reversal_score="{rv.reversal_score:.4f}" '
+            L.append(f'    <group ticker="{rv.ticker}" name="{X(rv.name)}" reversal_score="{rv.reversal_score:.4f}" '
                      f'percentile="{rv.reversal_percentile:.0f}" '
                      f'breadth_det="{rv.breadth_det_pillar:.0f}" price_break="{rv.price_break_pillar:.0f}" '
                      f'crowding="{rv.crowding_pillar:.0f}" '
