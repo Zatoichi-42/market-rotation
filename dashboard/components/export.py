@@ -262,12 +262,12 @@ def _build_claude_xml(result: dict) -> str:
     regime_char = result.get("regime_character")
     if regime_char is not None:
         L.append(f'  <regime_character character="{X(regime_char.character.value)}" '
-                 f'gate_level="{regime_char.gate_level}" confidence="{regime_char.confidence}" '
+                 f'gate_level="{regime_char.gate_level.value}" confidence="{regime_char.confidence}" '
                  f'spy_20d_return="{regime_char.spy_20d_return:.6f}" '
                  f'cross_sector_dispersion="{regime_char.cross_sector_dispersion:.6f}" '
                  f'breadth_trend="{X(regime_char.breadth_trend)}" '
                  f'vix_trend="{X(regime_char.vix_trend)}" '
-                 f'prior_character="{X(regime_char.prior_character)}" '
+                 f'prior_character="{X(regime_char.prior_character.value if regime_char.prior_character else "None")}" '
                  f'sessions_in_character="{regime_char.sessions_in_character}" '
                  f'description="{X(regime_char.description)}"/>')
 
