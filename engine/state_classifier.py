@@ -268,9 +268,22 @@ def _determine_state(
         or rs_60d > 0.005
     )
     min_exh_sessions = settings.get("exhaustion", {}).get("pump_delta_nonpositive_sessions", 3)
+
+    # Sustained leader exemption: rank #1 + Full Confirm + strong 60d RS
+    # gets a much higher bar for Exhaustion (normal pullbacks don't trigger it)
+    sl_cfg = settings.get("sustained_leader", {})
+    _is_sustained_leader = (
+        rs_rank == 1
+        and rs_60d > sl_cfg.get("min_rs_60d", 0.15)
+        and horizon_pattern == HorizonPattern.FULL_CONFIRM
+        and not all_rs_negative
+    )
+    _exh_consec = min_exh_sessions + sl_cfg.get("extra_exh_sessions", 3) if _is_sustained_leader else min_exh_sessions
+    _exh_rev_bar = sl_cfg.get("exh_rev_bar", 80) if _is_sustained_leader else 50
+
     if (had_prior_high
-            and consec_negative >= min_exh_sessions
-            and rev_pctl > 50):
+            and consec_negative >= _exh_consec
+            and rev_pctl > _exh_rev_bar):
         if concentration is not None and hasattr(concentration, 'regime'):
             from engine.schemas import ConcentrationRegime
             if concentration.regime == ConcentrationRegime.CONCENTRATED_HEALTHY:
@@ -284,16 +297,19 @@ def _determine_state(
             return AnalysisState.EXHAUSTION
 
     # ── STEP 5: DISTRIBUTION ──
+    # Sustained leaders skip Distribution on moderate pullbacks (fall through to Broadening)
     min_dist_sessions = settings.get("distribution", {}).get("pump_delta_negative_sessions", 3)
     if (consec_negative >= min_dist_sessions
             and 0.35 <= score <= 0.65
-            and not all_rs_negative):
+            and not all_rs_negative
+            and not _is_sustained_leader):
         return AnalysisState.DISTRIBUTION
 
     # Distribution from prior Overt Pump/Broadening with negative delta
     if (prior_state in (AnalysisState.OVERT_PUMP, AnalysisState.BROADENING)
             and consec_negative >= min_dist_sessions
-            and score > 0.50):
+            and score > 0.50
+            and not _is_sustained_leader):
         return AnalysisState.DISTRIBUTION
 
     # ── STEP 6: BROADENING ──
@@ -306,16 +322,16 @@ def _determine_state(
 
     # ── STEP 6b: SUSTAINED LEADER ──
     # Rank #1 with strong 60d RS gets a wider reversal leash.
-    # A sector that has dominated for 3 months earns more room before downgrade.
     _sustained_rev_threshold = 75
     if rs_rank == 1 and rs_60d > 0.20:
         _sustained_rev_threshold = 85
+    _sl_max_neg = sl_cfg.get("broadening_max_consec_neg", 6)
 
     if (rs_rank == 1
-            and pump_percentile >= 80
+            and pump_percentile >= 70  # Lowered from 80 — sustained leaders can dip
             and rs_60d > 0.10
             and rev_pctl < _sustained_rev_threshold
-            and consec_negative < 3
+            and consec_negative < _sl_max_neg
             and not _bullish_blocked):
         return AnalysisState.BROADENING
 
@@ -461,14 +477,14 @@ def _compute_confidence(
     if regime == RegimeState.HOSTILE:
         confidence -= 25
     elif regime == RegimeState.FRAGILE:
-        confidence -= 15
+        confidence -= 10  # Calibration seed v9.1 — reduced from -15 to avoid Ambiguous overload
 
     # ── Rank-1 confidence floor ──
     # The market's dominant sector with all horizons confirming cannot
-    # drop below confidence 45 regardless of regime penalties.
+    # drop below confidence 55 regardless of regime penalties.
     if (rs_rank == 1
             and horizon_pattern == HorizonPattern.FULL_CONFIRM
             and rs_5d > 0 and rs_20d > 0 and rs_60d > 0):
-        confidence = max(confidence, 45)
+        confidence = max(confidence, 55)
 
     return max(10, min(95, confidence))

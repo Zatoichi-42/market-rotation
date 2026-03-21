@@ -112,6 +112,37 @@ def classify_signal(signal_name: str, value: float, thresholds: dict) -> RegimeS
             level = SignalLevel.NORMAL
             desc = f"Correlation z-score {value:.2f} (healthy dispersion)"
 
+    elif signal_name == "move":
+        # MOVE index: bond market volatility — enriches Risk Appetite pillar
+        move_cfg = thresholds.get("move", {})
+        hostile_min = move_cfg.get("hostile_min", 130)
+        fragile_min = move_cfg.get("fragile_min", 110)
+        if value >= hostile_min:
+            level = SignalLevel.HOSTILE
+            desc = f"MOVE at {value:.0f} (extreme bond vol, ≥{hostile_min})"
+        elif value >= fragile_min:
+            level = SignalLevel.FRAGILE
+            desc = f"MOVE at {value:.0f} (elevated bond vol, {fragile_min}-{hostile_min})"
+        else:
+            level = SignalLevel.NORMAL
+            desc = f"MOVE at {value:.0f} (normal bond vol, <{fragile_min})"
+
+    elif signal_name == "sb_correlation":
+        # Stock-bond correlation: enriches Correlation Structure pillar
+        # Positive SB-corr = stocks and bonds falling together = bad
+        sb_cfg = thresholds.get("sb_correlation", {})
+        hostile_thresh = sb_cfg.get("hostile", 0.30)
+        fragile_thresh = sb_cfg.get("fragile", 0.15)
+        if value >= hostile_thresh:
+            level = SignalLevel.HOSTILE
+            desc = f"SB-corr {value:+.2f} (stocks and bonds falling together, ≥{hostile_thresh})"
+        elif value >= fragile_thresh:
+            level = SignalLevel.FRAGILE
+            desc = f"SB-corr {value:+.2f} (positive, hedging unreliable, ≥{fragile_thresh})"
+        else:
+            level = SignalLevel.NORMAL
+            desc = f"SB-corr {value:+.2f} (negative/neutral, duration hedging works)"
+
     else:
         raise ValueError(f"Unknown signal name: {signal_name}")
 
@@ -183,6 +214,8 @@ def classify_regime_from_data(
     correlation_zscore: float = float("nan"),
     gold_silver_reading=None,
     gold_divergence_reading=None,
+    move_level: float = float("nan"),
+    sb_correlation: float = float("nan"),
 ) -> RegimeAssessment:
     """
     Convenience function: classify regime from raw values.
@@ -198,6 +231,8 @@ def classify_regime_from_data(
         ("credit", credit_zscore),
         ("oil", oil_zscore),
         ("correlation", correlation_zscore),
+        ("move", move_level),
+        ("sb_correlation", sb_correlation),
     ]
 
     signals = []

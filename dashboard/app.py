@@ -142,11 +142,26 @@ def run_pipeline(_progress=None):
             gold_vix_divergence_active=(gd_reading.is_margin_call_regime if gd_reading else False),
         )
 
+    # Compute SB-corr and MOVE for regime gate enrichment (v9 constitution)
+    from engine.treasury_context import compute_sb_correlation
+    sb_corr_val = float("nan")
+    if "TLT" in prices.columns and "SPY" in prices.columns:
+        sb_corr_val = compute_sb_correlation(prices["TLT"], prices["SPY"])
+
+    fred_all = data.get("fred_all") or {}
+    move_level = 100.0
+    if isinstance(fred_all, dict) and "move_index" in fred_all:
+        move_df = fred_all["move_index"]
+        if move_df is not None and not move_df.empty:
+            move_level = float(move_df.iloc[-1].iloc[0]) if hasattr(move_df.iloc[-1], 'iloc') else float(move_df.iloc[-1])
+
     regime = classify_regime_from_data(vix_val, vix3m_val, bz, credit_z, settings["regime"],
                                        fred_hy_oas_value=fred_oas_bps, oil_zscore=oil_z,
                                        correlation_zscore=corr_z,
                                        gold_silver_reading=gs_reading,
-                                       gold_divergence_reading=gd_reading)
+                                       gold_divergence_reading=gd_reading,
+                                       move_level=move_level,
+                                       sb_correlation=sb_corr_val)
 
     # Crisis Type Detection (Phase 5)
     from engine.crisis_alignment import detect_crisis_type
@@ -178,14 +193,8 @@ def run_pipeline(_progress=None):
         breadth_trend="deteriorating" if bz < -0.5 else ("improving" if bz > 0.5 else "stable"),
     )
 
-    # Treasury Context (Constitution v9)
+    # Treasury Context (Constitution v9) — move_level and fred_all already extracted above
     from engine.treasury_context import compute_treasury_context
-    fred_all = data.get("fred_all") or {}
-    move_level = 100.0
-    if isinstance(fred_all, dict) and "move_index" in fred_all:
-        move_df = fred_all["move_index"]
-        if move_df is not None and not move_df.empty:
-            move_level = float(move_df.iloc[-1].iloc[0]) if hasattr(move_df.iloc[-1], 'iloc') else float(move_df.iloc[-1])
 
     yield_10y = None
     if isinstance(fred_all, dict) and "dgs10" in fred_all:

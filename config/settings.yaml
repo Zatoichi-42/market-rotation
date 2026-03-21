@@ -28,6 +28,12 @@ regime:
   credit:
     normal_min_zscore: -0.5
     fragile_min_zscore: -1.5
+  move:
+    fragile_min: 110
+    hostile_min: 130
+  sb_correlation:
+    fragile: 0.15
+    hostile: 0.30
   gate:
     hostile_threshold: 2
     fragile_mixed: true
@@ -110,6 +116,12 @@ state:
     reversal_pctl_bullish_block: 90
     reversal_pctl_ambiguous_force: 75
     min_confidence_for_directional: 25
+  sustained_leader:
+    min_rs_60d: 0.15             # 60d RS must exceed this for sustained leader exemption
+    extra_exh_sessions: 3        # Added to min_exh_sessions (6 total vs 3 default)
+    exh_rev_bar: 80              # Higher reversal threshold for sustained leaders
+    broadening_max_consec_neg: 6 # More generous negative delta tolerance
+
   confidence_floors:
     overt_pump: 40
     overt_dump: 40
