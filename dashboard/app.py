@@ -499,6 +499,19 @@ def run_pipeline(_progress=None):
     sector_trade_states = {t: ts for t, ts in trade_states.items() if t in SECTOR_NAMES}
     current_date = prices.index[-1].strftime("%Y-%m-%d")
 
+    # Detect after-hours: if price date < today or time > 16:30 ET → definitive
+    from datetime import time as dt_time
+    import pytz
+    _now_et = datetime.now(pytz.timezone("US/Eastern")) if "pytz" in dir() else datetime.now(timezone.utc)
+    try:
+        import pytz as _pz
+        _now_et = datetime.now(_pz.timezone("US/Eastern"))
+    except ImportError:
+        _now_et = datetime.now(timezone.utc)
+    _price_date = prices.index[-1].strftime("%Y-%m-%d")
+    _today = _now_et.strftime("%Y-%m-%d")
+    _is_after_close = (_price_date < _today) or (_now_et.hour >= 16 and _now_et.minute >= 30) or (_now_et.hour > 16)
+
     market_data = {
         "prices": prices,
         "regime_gate": regime.state.value,
@@ -510,6 +523,7 @@ def run_pipeline(_progress=None):
         "current_date": current_date,
         "vix_level": vix_val,
         "crisis_types": crisis_types,
+        "is_definitive": _is_after_close,
     }
 
     new_calls = generate_calls(
@@ -533,6 +547,11 @@ def run_pipeline(_progress=None):
     # Close expired/reversed/decayed calls
     journal_calls = close_calls(journal_calls, sector_trade_states, regime.state.value,
                                 current_date, current_targets=current_targets)
+
+    # After market close: mark all open calls as definitive
+    if _is_after_close:
+        from engine.trade_journal import mark_calls_definitive
+        journal_calls = mark_calls_definitive(journal_calls)
 
     # Compute summary
     journal_summary = compute_journal_summary(journal_calls)

@@ -103,8 +103,12 @@ def render_briefing(result: dict):
             elif entry_target < 0 and cur_target is not None and abs(cur_target) < 15:
                 decayed = True
 
-            prov_badge = " `PROVISIONAL`" if is_prov else " `DEFINITIVE`"
-            decay_badge = " `EDGE DECAYED`" if decayed else ""
+            if decayed:
+                status_badge = " `EDGE DECAYED`"
+            elif is_prov:
+                status_badge = " `PROVISIONAL`"
+            else:
+                status_badge = " `OPEN`"
             ts_str = f" @ {ts}" if ts and is_prov else ""
 
             color = "#dc2626" if decayed else ("#f59e0b" if is_prov else "#16a34a")
@@ -112,7 +116,7 @@ def render_briefing(result: dict):
                 f"<div style='padding:6px 10px;background:rgba(0,0,0,0.2);border-left:3px solid {color};"
                 f"border-radius:4px;margin-bottom:6px;'>"
                 f"<b>{label}</b> — {direction} {entry_target:+d}%"
-                f"{prov_badge}{decay_badge}{ts_str}<br>"
+                f"{status_badge}{ts_str}<br>"
                 f"<span style='font-size:0.85em;color:#9ca3af;'>"
                 f"Entry: ${entry_price:.2f} | Conf: {conf} | "
                 f"Current target: {cur_target:+d}%"
