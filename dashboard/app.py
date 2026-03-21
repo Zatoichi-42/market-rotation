@@ -50,15 +50,30 @@ def load_config():
     return settings, universe
 
 
-@st.cache_data(ttl=300)  # 5 min cache — ensures fresh intraday data
-def run_pipeline():
-    """Run the full pipeline and return current snapshot + raw data.
-    Uses latest available prices (intraday during market hours)."""
+@st.cache_data(ttl=300)
+def _fetch_data():
+    """Cache the expensive data fetch (yfinance + FRED)."""
     settings, universe = load_config()
     config = {**settings, **universe}
-    data = fetch_all(config, force_refresh=True)  # Always get latest prices
+    data = fetch_all(config, force_refresh=True)
+    return settings, universe, data
+
+
+def run_pipeline(_progress=None):
+    """Run the full pipeline and return current snapshot + raw data.
+    Uses latest available prices (intraday during market hours)."""
+    def _update(msg, pct):
+        if _progress:
+            _progress.update(label=f"Running pipeline... {pct}%")
+            import streamlit as _st
+            _st.write(msg)
+
+    _update("Fetching market data...", 5)
+    settings, universe, data = _fetch_data()
+    config = {**settings, **universe}
     prices = data["prices"]
 
+    _update("Computing regime gate...", 10)
     # Regime
     vix_val = data["vix"].iloc[-1] if len(data["vix"]) > 0 else 20.0
     vix3m_val = data["vix3m"].iloc[-1] if len(data["vix3m"]) > 0 else 20.0
@@ -228,6 +243,7 @@ def run_pipeline():
         gate_level=regime.state,
     )
 
+    _update("Catalyst gate + concentration...", 20)
     # Catalyst Gate (between regime and state classifier)
     catalysts = load_catalyst_calendar()
     today_str = prices.index[-1].strftime("%Y-%m-%d")
@@ -245,6 +261,7 @@ def run_pipeline():
     )
     concentration_map = {c.sector_ticker: c for c in concentrations}
 
+    _update("Computing RS rankings...", 30)
     # RS
     rs_cfg = settings["rs"]
     rs_readings = compute_rs_readings(
@@ -257,6 +274,7 @@ def run_pipeline():
     # RS history for sparklines + pump score history
     rs_20d_history = compute_rs_all(prices, list(SECTOR_NAMES.keys()), window=20)
 
+    _update("Computing pump scores (20-session history)...", 40)
     # Compute pump scores across recent history to get real deltas
     pump_weights = settings["pump_score"]
     lookback = 20  # sessions of pump history for deltas
@@ -365,6 +383,7 @@ def run_pipeline():
             sc = compute_pump_score(ir.industry_composite, 50.0, 50.0, pump_weights)
             ind_score_history[ir.ticker].append(sc)
 
+    _update("Computing reversal scores...", 55)
     # Reversal Scores (Phase 2) — with rolling history for real percentiles
     from engine.reversal_score import compute_reversal_score
     rev_settings = settings.get("reversal", {})
@@ -409,6 +428,7 @@ def run_pipeline():
                 pump_score=current_score, pump_delta=delta, pump_delta_5d_avg=d5,
             )
 
+    _update("Classifying states...", 70)
     # State Classifier (sectors + industries, with reversal scores)
     all_ranks = {r.ticker: r.rs_rank for r in rs_readings}
     for ir in industry_rs_readings:
@@ -442,6 +462,7 @@ def run_pipeline():
     # Merge industry states into the main states dict
     states.update(industry_states)
 
+    _update("Mapping trade states...", 80)
     # Trade State Mapper (Layer 4)
     from engine.trade_state_mapper import map_all_trade_states
     all_ranks_for_trade = {r.ticker: r.rs_rank for r in rs_readings}
@@ -454,6 +475,7 @@ def run_pipeline():
         regime_character=regime_char_reading.character,
     )
 
+    _update("Updating trade journal...", 90)
     # Trade Journal (Phase 4b) — generate calls, fill forward returns
     from engine.trade_journal import (
         load_journal, generate_calls, update_forward_returns,
@@ -558,7 +580,10 @@ def run_pipeline():
 def main():
     st.title("Pump Rotation System")
 
-    result = run_pipeline()
+    with st.status("Running pipeline...", expanded=True) as status:
+        st.write("Loading configuration...")
+        result = run_pipeline(_progress=status)
+        status.update(label="Pipeline complete", state="complete", expanded=False)
 
     # Export button in sidebar
     from dashboard.components.export import render_export_button
