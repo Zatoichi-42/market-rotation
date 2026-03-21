@@ -7,6 +7,28 @@ from engine.schemas import (
     AnalysisState, TradeState,
 )
 
+# Default ticker → name mapping for all sectors and key industries
+_TICKER_NAMES = {
+    "XLK": "Technology", "XLV": "Health Care", "XLF": "Financials",
+    "XLE": "Energy", "XLI": "Industrials", "XLU": "Utilities",
+    "XLRE": "Real Estate", "XLC": "Communication Services",
+    "XLY": "Consumer Discretionary", "XLP": "Consumer Staples", "XLB": "Materials",
+    "SMH": "Semiconductors", "IGV": "Software", "HACK": "Cybersecurity", "SOXX": "Semis (iShares)",
+    "XBI": "Biotech", "IHI": "Medical Devices",
+    "KRE": "Regional Banks", "IAI": "Broker-Dealers", "KIE": "Insurance",
+    "XOP": "Oil & Gas E&P", "OIH": "Oil Services", "URA": "Uranium",
+    "ITA": "Aerospace & Defense", "XAR": "A&D (SPDR)",
+    "TAN": "Solar", "NLR": "Nuclear", "VNQ": "REITs",
+    "XHB": "Homebuilders", "ITB": "Home Construction", "XRT": "Retail", "IBUY": "eCommerce Retail",
+    "XME": "Metals & Mining", "GDX": "Gold Miners", "SIL": "Silver Miners",
+}
+
+
+def _tn(ticker: str, names: dict | None = None) -> str:
+    """Return 'TICKER (Name)' for any ticker."""
+    n = (names or _TICKER_NAMES).get(ticker, "")
+    return f"{ticker} ({n})" if n else ticker
+
 
 # ── Template Dictionaries ────────────────────────────────
 
@@ -163,8 +185,17 @@ def generate_executive_briefing(
     gold_divergence=None,      # GoldDivergenceReading | None
     oil_signal_level="NORMAL", # str
     vix_level=20.0,            # float
+    ticker_names: dict | None = None,  # ticker → name override
 ) -> str:
     """Generate a plain-English executive briefing from system state."""
+    # Build name lookup: merge defaults with trade_state names and any overrides
+    names = dict(_TICKER_NAMES)
+    for t, ts in trade_states.items():
+        if hasattr(ts, "name") and ts.name:
+            names[t] = ts.name
+    if ticker_names:
+        names.update(ticker_names)
+
     sections = []
 
     # ── THE SITUATION ────────────────────────────────
@@ -220,7 +251,7 @@ def generate_executive_briefing(
             state_val = ts.analysis_state.value if ts and hasattr(ts.analysis_state, "value") else str(ts.analysis_state) if ts else "Unknown"
             state_lang = STATE_LANGUAGE.get(state_val, {})
             desc = state_lang.get("description", "")
-            action_lines.append(f"  {ticker}: target {target:+d}% — {desc}")
+            action_lines.append(f"  {_tn(ticker, names)}: target {target:+d}% — {desc}")
 
     if shorts:
         action_lines.append("SHORT (defined-risk put spreads only):")
@@ -229,12 +260,12 @@ def generate_executive_briefing(
             state_val = ts.analysis_state.value if ts and hasattr(ts.analysis_state, "value") else str(ts.analysis_state) if ts else "Unknown"
             state_lang = STATE_LANGUAGE.get(state_val, {})
             desc = state_lang.get("description", "")
-            action_lines.append(f"  {ticker}: target {target:+d}% — {desc}")
+            action_lines.append(f"  {_tn(ticker, names)}: target {target:+d}% — {desc}")
 
     if avoids:
         action_lines.append(f"AVOID ({len(avoids)} sectors with no actionable edge):")
         for ticker, target in avoids:
-            action_lines.append(f"  {ticker}: target {target:+d}%")
+            action_lines.append(f"  {_tn(ticker, names)}: target {target:+d}%")
 
     sections.append("WHAT TO DO")
     sections.append("\n".join(action_lines) if action_lines else "No actionable calls. Stay in cash and avoid forcing trades.")
@@ -260,9 +291,9 @@ def generate_executive_briefing(
         pattern = hr.pattern if hasattr(hr, "pattern") else hr
         pattern_val = pattern.value if hasattr(pattern, "value") else str(pattern)
         if pattern_val == "Dead Cat":
-            risk_lines.append(f"WARNING: {ticker} showing Dead Cat pattern. Do NOT buy the bounce — it's a TRAP.")
+            risk_lines.append(f"WARNING: {_tn(ticker, names)} showing Dead Cat pattern. Do NOT buy the bounce — it's a TRAP.")
         elif pattern_val == "Rotation Out":
-            risk_lines.append(f"CAUTION: {ticker} rotation ending. Tighten stops or take profits.")
+            risk_lines.append(f"CAUTION: {_tn(ticker, names)} rotation ending. Tighten stops or take profits.")
 
     sections.append("KEY RISKS")
     sections.append("\n".join(risk_lines) if risk_lines else "No elevated risk signals at this time.")
@@ -279,7 +310,7 @@ def generate_executive_briefing(
             horizon_lang = HORIZON_LANGUAGE.get(pattern_val, HORIZON_LANGUAGE.get("No Pattern", {}))
             meaning = horizon_lang.get("meaning", "")
             implication = horizon_lang.get("implication", "")
-            horizon_lines.append(f"{ticker} [{pattern_val}]: {meaning}")
+            horizon_lines.append(f"{_tn(ticker, names)} [{pattern_val}]: {meaning}")
             if implication:
                 horizon_lines.append(f"  -> {implication}")
 
