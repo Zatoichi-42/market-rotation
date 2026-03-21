@@ -52,12 +52,14 @@ def render_briefing(result: dict):
                 oil_level = sig.level.value
 
     # Generate briefing text
+    treasury_ctx = result.get("treasury_context")
     briefing_text = generate_executive_briefing(
         regime=regime, regime_character=regime_char,
         crisis_types=crisis_types, trade_states=trade_states,
         horizon_readings=horizon_readings, sector_targets=sector_targets,
         journal_summary=journal_summary, gold_divergence=gold_div,
         oil_signal_level=oil_level, vix_level=vix_val,
+        treasury_context=treasury_ctx,
     )
 
     # Display

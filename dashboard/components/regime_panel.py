@@ -164,6 +164,29 @@ def render_regime_panel(result: dict):
             unsafe_allow_html=True,
         )
 
+    # ── Treasury Context ────────────────────────────
+    tc = result.get("treasury_context")
+    if tc is not None:
+        fit_colors = {"Supportive": "#16a34a", "Mixed": "#f59e0b", "Adverse": "#dc2626"}
+        fit_color = fit_colors.get(tc.treasury_fit.value, "#6b7280")
+        watch_badge = (" <span style='background:#f59e0b;color:black;padding:2px 6px;"
+                       "border-radius:4px;font-size:0.8em;'>GATE WATCH</span>"
+                       if tc.gate_watch else "")
+        st.markdown(
+            f"<div style='padding:10px;background:rgba(0,0,0,0.2);border-radius:6px;margin-bottom:12px;'>"
+            f"<b>Treasury Fit:</b> "
+            f"<span style='color:{fit_color};font-weight:bold;'>{tc.treasury_fit.value}</span>"
+            f"{watch_badge}"
+            f" | <b>Cash Hurdle:</b> {tc.cash_hurdle:.2f}%"
+            f" | <b>Defensive:</b> {tc.defensive_vehicle.value}"
+            f" | <b>Shock:</b> {tc.shock_type.value}"
+            f"<br><span style='font-size:0.85em;color:#9ca3af;'>"
+            f"SB-corr: {tc.sb_correlation:+.2f} | MOVE: {tc.move_level:.0f} | "
+            f"TLT-SHY 20d: {tc.tlt_vs_shy_20d:+.2%} | 10y Δ20d: {tc.yield_10y_20d_change:+.2f}%"
+            f"</span></div>",
+            unsafe_allow_html=True,
+        )
+
     # ── Gold/Silver Ratio Modifier ────────────────────
     gs_reading = result.get("gold_silver_reading")
     if gs_reading is not None:

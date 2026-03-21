@@ -163,6 +163,33 @@ def run_pipeline():
         breadth_trend="deteriorating" if bz < -0.5 else ("improving" if bz > 0.5 else "stable"),
     )
 
+    # Treasury Context (Constitution v9)
+    from engine.treasury_context import compute_treasury_context
+    fred_all = data.get("fred_all") or {}
+    move_level = 100.0
+    if isinstance(fred_all, dict) and "move_index" in fred_all:
+        move_df = fred_all["move_index"]
+        if move_df is not None and not move_df.empty:
+            move_level = float(move_df.iloc[-1].iloc[0]) if hasattr(move_df.iloc[-1], 'iloc') else float(move_df.iloc[-1])
+
+    yield_10y = None
+    if isinstance(fred_all, dict) and "dgs10" in fred_all:
+        y10_df = fred_all["dgs10"]
+        if y10_df is not None and not y10_df.empty:
+            yield_10y = y10_df.iloc[:, 0] if isinstance(y10_df, pd.DataFrame) else y10_df
+
+    tbill_3m = None
+    if isinstance(fred_all, dict) and "dtb3" in fred_all:
+        tb_df = fred_all["dtb3"]
+        if tb_df is not None and not tb_df.empty:
+            tbill_3m = float(tb_df.iloc[-1].iloc[0]) if hasattr(tb_df.iloc[-1], 'iloc') else float(tb_df.iloc[-1])
+
+    treasury_context = compute_treasury_context(
+        prices=prices, regime_signals=regime.signals,
+        regime_state=regime.state, settings=settings,
+        move_level=move_level, yield_10y=yield_10y, tbill_3m=tbill_3m,
+    )
+
     # Regime Character (Phase 4)
     from engine.regime_character import classify_regime_character
     from engine.correlation import compute_cross_sector_dispersion
@@ -519,6 +546,7 @@ def run_pipeline():
         "journal_calls": journal_calls,
         "journal_summary": journal_summary,
         "crisis_types": crisis_types,
+        "treasury_context": treasury_context,
     }
 
 

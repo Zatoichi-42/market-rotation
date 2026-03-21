@@ -319,6 +319,20 @@ def _build_claude_xml(result: dict) -> str:
                  f'sessions_in_character="{regime_char.sessions_in_character}" '
                  f'description="{X(regime_char.description)}"/>')
 
+    # ── Treasury Context ──
+    tc = result.get("treasury_context")
+    if tc is not None:
+        L.append(f'  <treasury_context fit="{X(tc.treasury_fit.value)}" '
+                 f'cash_hurdle="{tc.cash_hurdle:.2f}" '
+                 f'shock_type="{X(tc.shock_type.value)}" '
+                 f'sb_correlation="{tc.sb_correlation:.3f}" '
+                 f'move_level="{tc.move_level:.1f}" '
+                 f'tlt_vs_shy_20d="{tc.tlt_vs_shy_20d:.6f}" '
+                 f'yield_10y_20d_change="{tc.yield_10y_20d_change:.3f}" '
+                 f'defensive_vehicle="{tc.defensive_vehicle.value}" '
+                 f'gate_watch="{tc.gate_watch}" '
+                 f'description="{X(tc.description)}"/>')
+
     # ── VIX Detail ──
     if vix is not None and len(vix) >= 2:
         vix_1d = vix.iloc[-1] - vix.iloc[-2]

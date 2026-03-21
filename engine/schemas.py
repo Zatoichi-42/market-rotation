@@ -458,6 +458,43 @@ class HorizonReading:
     is_entry_zone: bool                # True for HEALTHY_DIP
 
 
+# ── Treasury Context (Constitution v9) ────────────
+
+class TreasuryFit(Enum):
+    SUPPORTIVE = "Supportive"     # Duration hedges equity; flight-to-quality active
+    MIXED = "Mixed"               # Noisy; prefer bills over duration
+    ADVERSE = "Adverse"           # Duration adds risk; stocks and bonds falling together
+
+
+class TreasuryShockType(Enum):
+    NONE = "None"
+    GROWTH_SCARE = "Growth Scare"           # Yields falling, flight-to-quality
+    INFLATION_TERM_PREMIUM = "Inflation/Term Premium"  # Yields rising, duration hurts
+
+
+class DefensiveVehicle(Enum):
+    TLT = "TLT"       # Long duration (Supportive + growth scare)
+    IEF = "IEF"       # Intermediate duration (Supportive/Mixed)
+    SHY = "SHY"       # Short duration (Mixed/Adverse)
+    BIL = "BIL"       # Bills/cash equivalent (Adverse)
+    TIP = "TIP"       # TIPS (inflation-driven Adverse)
+    NONE = "None"      # No defensive position
+
+
+@dataclass
+class TreasuryContextReading:
+    treasury_fit: TreasuryFit
+    cash_hurdle: float                # 3-month T-bill yield (annualized %)
+    shock_type: TreasuryShockType
+    sb_correlation: float             # 21d TLT/SPY correlation
+    move_level: float                 # MOVE index level
+    tlt_vs_shy_20d: float            # TLT 20d return minus SHY 20d return
+    yield_10y_20d_change: float      # 10yr yield 20d change
+    defensive_vehicle: DefensiveVehicle
+    gate_watch: bool                  # True = stress building
+    description: str
+
+
 # ── Crisis Type (Phase 5) ─────────────────────────
 
 class CrisisType(Enum):

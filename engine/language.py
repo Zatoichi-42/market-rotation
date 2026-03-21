@@ -186,6 +186,7 @@ def generate_executive_briefing(
     oil_signal_level="NORMAL", # str
     vix_level=20.0,            # float
     ticker_names: dict | None = None,  # ticker → name override
+    treasury_context=None,     # TreasuryContextReading | None
 ) -> str:
     """Generate a plain-English executive briefing from system state."""
     # Build name lookup: merge defaults with trade_state names and any overrides
@@ -226,6 +227,30 @@ def generate_executive_briefing(
         desc = char_lang.get("description", "")
         if desc:
             situation_lines.append(desc)
+
+    # Treasury context
+    if treasury_context is not None:
+        fit_val = treasury_context.treasury_fit.value if hasattr(treasury_context.treasury_fit, 'value') else str(treasury_context.treasury_fit)
+        if fit_val == "Adverse":
+            situation_lines.append(
+                "Treasury Fit is Adverse — stocks and bonds are falling together. "
+                "Long duration adds risk. Cash and short-duration bills are the safest defensive position."
+            )
+        elif fit_val == "Supportive":
+            situation_lines.append(
+                "Treasury Fit is Supportive — flight-to-quality dynamics active. "
+                "Long-duration treasuries (TLT) provide genuine hedging value."
+            )
+        if treasury_context.gate_watch:
+            situation_lines.append(
+                "Gate Watch is ON — multiple regime signals are approaching their danger thresholds. "
+                "Position sizes are being reduced as a precaution."
+            )
+        if treasury_context.cash_hurdle > 3.0:
+            situation_lines.append(
+                f"Cash hurdle: {treasury_context.cash_hurdle:.1f}% annualized from T-bills. "
+                f"The system must beat this to justify equity risk."
+            )
 
     # Crisis alignment note when actionable buys exist during crisis
     has_buys = any(t >= 15 for t in sector_targets.values())

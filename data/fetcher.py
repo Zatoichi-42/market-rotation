@@ -55,7 +55,9 @@ def fetch_all(config: dict, force_refresh: bool = False) -> dict:
     commodity_tickers = list(config.get("commodities", {}).values())
     # Market modifier tickers (GLD, SLV for gold/silver ratio)
     modifier_tickers = list(config.get("market_modifiers", {}).values())
-    all_tickers = _MARKET_TICKERS + _SECTOR_TICKERS + industry_tickers + leader_tickers + commodity_tickers + modifier_tickers
+    # Treasury tickers (TLT, IEF, SHY, TIP, BIL)
+    treasury_tickers = list(config.get("treasury", {}).values())
+    all_tickers = _MARKET_TICKERS + _SECTOR_TICKERS + industry_tickers + leader_tickers + commodity_tickers + modifier_tickers + treasury_tickers
     # Deduplicate while preserving order
     seen = set()
     all_tickers = [t for t in all_tickers if not (t in seen or seen.add(t))]

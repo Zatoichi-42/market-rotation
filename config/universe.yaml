@@ -11,6 +11,21 @@ market:
   small_cap: "IWM"
   dow: "DIA"
 
+# Treasury instruments (Constitution v9)
+treasury:
+  long_duration: "TLT"
+  intermediate: "IEF"
+  short_duration: "SHY"
+  tips: "TIP"
+  bills: "BIL"
+
+# FRED series for treasury context
+fred:
+  hy_oas: "BAMLH0A0HYM2"
+  move_index: "BAMLMOVE0S100XYINDEX"
+  dgs10: "DGS10"
+  dtb3: "DTB3"
+
 # 11 GICS Sector ETFs
 sectors:
   - ticker: "XLK"

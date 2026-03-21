@@ -158,6 +158,15 @@ gold_silver_ratio:
   fragile_zscore: 1.0
   hostile_zscore: 2.0
 
+# Treasury Context (Constitution v9)
+treasury:
+  sb_corr_window: 21
+  sb_corr_supportive: -0.15      # Below this = Supportive
+  sb_corr_adverse: 0.15          # Above this = Adverse
+  move_fragile: 110
+  move_hostile: 130
+  gate_watch_proximity_pct: 0.20  # Within 20% of threshold = near-flip
+
 # Cross-Horizon Divergence
 horizon:
   near_zero_threshold: 0.003      # ±0.3% RS treated as flat
