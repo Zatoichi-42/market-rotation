@@ -16,6 +16,8 @@ import pandas as pd
 import numpy as np
 
 from engine.schemas import AnalysisState
+from engine.language import generate_executive_briefing
+from engine.trade_journal import compute_target_pct
 
 
 _SECTOR_NAMES = {
@@ -60,6 +62,52 @@ def render_export_button(result: dict):
 # ═══════════════════════════════════════════════════════
 # SHARED HELPERS
 # ═══════════════════════════════════════════════════════
+
+def _generate_briefing_text(result: dict) -> str:
+    """Generate executive briefing text from result dict."""
+    regime = result.get("regime")
+    regime_char = result.get("regime_character")
+    crisis_types = result.get("crisis_types", [])
+    trade_states = result.get("trade_states", {})
+    horizon_readings = result.get("horizon_readings", {})
+    journal_summary = result.get("journal_summary")
+    gold_div = result.get("gold_divergence_reading")
+    vix_val = result.get("vix_val", 20.0)
+
+    # Compute sector targets
+    sector_targets = {}
+    for ticker in _SECTOR_NAMES:
+        ts = trade_states.get(ticker)
+        if not ts:
+            continue
+        hr = horizon_readings.get(ticker)
+        pattern = hr.pattern if hr else "No Pattern"
+        target, *_ = compute_target_pct(
+            ts.analysis_state, ts.confidence,
+            regime.state.value if regime else "NORMAL",
+            regime_char.character.value if regime_char else "Choppy",
+            pattern.value if hasattr(pattern, 'value') else str(pattern),
+            vix_level=vix_val,
+            ticker=ticker,
+            crisis_types=crisis_types,
+        )
+        sector_targets[ticker] = target
+
+    # Determine oil signal level from regime signals
+    oil_level = "NORMAL"
+    if regime:
+        for sig in regime.signals:
+            if "oil" in sig.name.lower():
+                oil_level = sig.level.value
+
+    return generate_executive_briefing(
+        regime=regime, regime_character=regime_char,
+        crisis_types=crisis_types, trade_states=trade_states,
+        horizon_readings=horizon_readings, sector_targets=sector_targets,
+        journal_summary=journal_summary, gold_divergence=gold_div,
+        oil_signal_level=oil_level, vix_level=vix_val,
+    )
+
 
 def _rs_color_word(val):
     """Describe RS value as a color word for heatmap text."""
@@ -331,7 +379,9 @@ def _build_claude_xml(result: dict) -> str:
         horizon = horizon_readings.get(r.ticker)
         horizon_attr = f' horizon="{X(horizon.pattern.value)}"' if horizon else ''
         L.append(f'    <sector ticker="{r.ticker}" name="{X(r.name)}" rank="{r.rs_rank}"{horizon_attr}>')
-        L.append(f'      <rs rs_5d="{r.rs_5d:.6f}" rs_20d="{r.rs_20d:.6f}" rs_60d="{r.rs_60d:.6f}" '
+        L.append(f'      <rs rs_2d="{getattr(r, "rs_2d", 0.0):.6f}" rs_5d="{r.rs_5d:.6f}" '
+                 f'rs_10d="{getattr(r, "rs_10d", 0.0):.6f}" rs_20d="{r.rs_20d:.6f}" '
+                 f'rs_60d="{r.rs_60d:.6f}" rs_120d="{getattr(r, "rs_120d", 0.0):.6f}" '
                  f'slope="{r.rs_slope:.6f}" composite="{r.rs_composite:.2f}"/>')
         L.append(f'      <sparkline_trend description="20d RS sparkline over 60 trading days: {trend}"/>')
         if pump:
@@ -397,10 +447,16 @@ def _build_claude_xml(result: dict) -> str:
             trend = _trend_description(prices, ir.ticker)
             L.append(f'    <industry ticker="{ir.ticker}" name="{X(ir.name)}" parent="{ir.parent_sector}" '
                      f'rank="{ir.rs_rank}" rank_within_sector="{ir.rs_rank_within_sector}">')
-            L.append(f'      <rs rs_5d="{ir.rs_5d:.6f}" rs_20d="{ir.rs_20d:.6f}" rs_60d="{ir.rs_60d:.6f}" '
+            L.append(f'      <rs rs_2d="{getattr(ir, "rs_2d", 0.0):.6f}" rs_5d="{ir.rs_5d:.6f}" '
+                     f'rs_10d="{getattr(ir, "rs_10d", 0.0):.6f}" rs_20d="{ir.rs_20d:.6f}" '
+                     f'rs_60d="{ir.rs_60d:.6f}" rs_120d="{getattr(ir, "rs_120d", 0.0):.6f}" '
                      f'slope="{ir.rs_slope:.6f}" composite="{ir.industry_composite:.2f}"/>')
-            L.append(f'      <rs_vs_parent rs_5d="{ir.rs_5d_vs_parent:.6f}" rs_20d="{ir.rs_20d_vs_parent:.6f}" '
-                     f'rs_60d="{ir.rs_60d_vs_parent:.6f}"/>')
+            L.append(f'      <rs_vs_parent rs_2d="{getattr(ir, "rs_2d_vs_parent", 0.0):.6f}" '
+                     f'rs_5d="{ir.rs_5d_vs_parent:.6f}" '
+                     f'rs_10d="{getattr(ir, "rs_10d_vs_parent", 0.0):.6f}" '
+                     f'rs_20d="{ir.rs_20d_vs_parent:.6f}" '
+                     f'rs_60d="{ir.rs_60d_vs_parent:.6f}" '
+                     f'rs_120d="{getattr(ir, "rs_120d_vs_parent", 0.0):.6f}"/>')
             L.append(f'      <sparkline_trend description="20d RS sparkline: {trend}"/>')
             if state:
                 L.append(f'      <state value="{state.state.value}" confidence="{state.confidence}"/>')
@@ -477,6 +533,13 @@ def _build_claude_xml(result: dict) -> str:
             L.append(f'    </lookback>')
         L.append('  </signal_reliability>')
 
+    # ── Executive Briefing ──
+    try:
+        briefing_text = _generate_briefing_text(result)
+        L.append(f'  <briefing>{X(briefing_text)}</briefing>')
+    except Exception:
+        L.append('  <briefing>Briefing generation failed.</briefing>')
+
     L.append('</pump_rotation_report>')
     return "\n".join(L)
 
@@ -503,6 +566,19 @@ def _build_markdown(result: dict) -> str:
 
     L = [f"# Pump Rotation System Report — {last_date}", "",
          f"*Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} | Live quotes: Yes*", ""]
+
+    # Executive Briefing
+    try:
+        briefing_text = _generate_briefing_text(result)
+        L.append("## Executive Briefing")
+        L.append("")
+        L.append(briefing_text)
+        L.append("")
+    except Exception:
+        L.append("## Executive Briefing")
+        L.append("")
+        L.append("*Briefing generation failed.*")
+        L.append("")
 
     # Regime
     L.append(f"## Regime: **{regime.state.value}**")
@@ -794,7 +870,9 @@ def _build_json(result: dict) -> str:
         horizon = horizon_readings.get(r.ticker)
         entry = {
             "rank": r.rs_rank, "ticker": r.ticker, "name": r.name,
-            "rs": {"5d": r.rs_5d, "20d": r.rs_20d, "60d": r.rs_60d,
+            "rs": {"2d": getattr(r, "rs_2d", 0.0), "5d": r.rs_5d,
+                   "10d": getattr(r, "rs_10d", 0.0), "20d": r.rs_20d,
+                   "60d": r.rs_60d, "120d": getattr(r, "rs_120d", 0.0),
                    "slope": r.rs_slope, "composite": r.rs_composite},
             "sparkline_trend": trend,
             "pump": {"score": pump.pump_score, "delta": pump.pump_delta,
@@ -829,8 +907,15 @@ def _build_json(result: dict) -> str:
         data["industries"].append({
             "rank": ir.rs_rank, "ticker": ir.ticker, "name": ir.name,
             "parent": ir.parent_sector,
-            "rs": {"5d": ir.rs_5d, "20d": ir.rs_20d, "60d": ir.rs_60d,
+            "rs": {"2d": getattr(ir, "rs_2d", 0.0), "5d": ir.rs_5d,
+                   "10d": getattr(ir, "rs_10d", 0.0), "20d": ir.rs_20d,
+                   "60d": ir.rs_60d, "120d": getattr(ir, "rs_120d", 0.0),
+                   "vs_parent_2d": getattr(ir, "rs_2d_vs_parent", 0.0),
+                   "vs_parent_5d": ir.rs_5d_vs_parent,
+                   "vs_parent_10d": getattr(ir, "rs_10d_vs_parent", 0.0),
                    "vs_parent_20d": ir.rs_20d_vs_parent,
+                   "vs_parent_60d": ir.rs_60d_vs_parent,
+                   "vs_parent_120d": getattr(ir, "rs_120d_vs_parent", 0.0),
                    "composite": ir.industry_composite},
             "sparkline_trend": trend,
             "state": state.state.value if state else None,
@@ -854,6 +939,12 @@ def _build_json(result: dict) -> str:
             "sub_signals": {k: float(v) for k, v in rv.sub_signals.items()},
             "state": state.state.value if state else None,
         })
+
+    # Executive Briefing
+    try:
+        data["briefing"] = _generate_briefing_text(result)
+    except Exception:
+        data["briefing"] = None
 
     # Signal reliability
     reliability = _get_signal_reliability(result)

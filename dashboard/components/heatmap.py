@@ -42,23 +42,33 @@ def make_rs_heatmap(
     has_parent = any(g.get("rs_vs_parent") is not None for g in sorted_g)
 
     # Build column data
-    col_names = ["5d RS", "20d RS", "60d RS"]
+    has_1d = any(g.get("rs_1d") is not None and g.get("rs_1d", 0) != 0 for g in sorted_g)
+    col_names = []
+    if has_1d:
+        col_names.append("1d RS")
+    col_names.extend(["5d RS", "20d RS", "60d RS"])
     if has_parent:
         col_names.append("vs Parent")
 
     z = []
     text = []
     for g in sorted_g:
-        row_z = [
+        row_z = []
+        row_text = []
+        if has_1d:
+            v1d = g.get("rs_1d", 0)
+            row_z.append(v1d * 100)
+            row_text.append(f"{v1d*100:+.1f}%")
+        row_z.extend([
             g.get("rs_5d", 0) * 100,
             g.get("rs_20d", 0) * 100,
             g.get("rs_60d", 0) * 100,
-        ]
-        row_text = [
+        ])
+        row_text.extend([
             f"{g.get('rs_5d', 0)*100:+.1f}%",
             f"{g.get('rs_20d', 0)*100:+.1f}%",
             f"{g.get('rs_60d', 0)*100:+.1f}%",
-        ]
+        ])
         if has_parent:
             vp = g.get("rs_vs_parent")
             if vp is not None:

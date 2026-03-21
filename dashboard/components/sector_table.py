@@ -146,8 +146,17 @@ def render_sector_table(result: dict):
     hm_groups = []
     for r in sorted(result["rs_readings"], key=lambda x: x.rs_rank):
         state = states.get(r.ticker)
+        # Compute 1d RS
+        rs_1d_val = 0.0
+        if r.ticker in prices.columns and "SPY" in prices.columns and len(prices) >= 2:
+            import pandas as pd
+            sec_1d = prices[r.ticker].pct_change(1).iloc[-1]
+            spy_1d = prices["SPY"].pct_change(1).iloc[-1]
+            if pd.notna(sec_1d) and pd.notna(spy_1d):
+                rs_1d_val = sec_1d - spy_1d
         hm_groups.append({
             "ticker": r.ticker, "name": r.name,
+            "rs_1d": rs_1d_val,
             "rs_5d": r.rs_5d, "rs_20d": r.rs_20d, "rs_60d": r.rs_60d,
             "rs_vs_parent": None,
             "state": state.state.value if state else "—",

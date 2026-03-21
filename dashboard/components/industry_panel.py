@@ -90,19 +90,29 @@ def render_industry_panel(result: dict):
         parent_state = state_map.get(r.parent_sector)
         parent_state_val = parent_state.state.value if parent_state else "—"
 
+        # Compute 1d RS for this industry
+        rs_1d_val = 0.0
+        if r.ticker in prices.columns and "SPY" in prices.columns and len(prices) >= 2:
+            sec_1d = prices[r.ticker].pct_change(1).iloc[-1]
+            spy_1d = prices["SPY"].pct_change(1).iloc[-1]
+            if pd.notna(sec_1d) and pd.notna(spy_1d):
+                rs_1d_val = sec_1d - spy_1d
+
         if is_rs:
             row = {"Rank": r.rs_rank, "Industry": f"{r.ticker} ({r.name})",
                    "Parent": _parent_label(r.parent_sector), "20d Trend": spark,
+                   "RS 1d": f"{rs_1d_val:+.2%}",
                    "RS 5d": f"{r.rs_5d:+.2%}", "RS 20d": f"{r.rs_20d:+.2%}", "RS 60d": f"{r.rs_60d:+.2%}",
                    "RS vs Parent": f"{vs_icon} {r.rs_20d_vs_parent:+.2%}",
                    "Slope": f"{r.rs_slope:+.4f}", "Composite": f"{r.industry_composite:.1f}"}
         else:
+            p1 = prices[r.ticker].pct_change(1).iloc[-1] if r.ticker in prices.columns else 0
             p5 = prices[r.ticker].pct_change(5).iloc[-1] if r.ticker in prices.columns else 0
             p20 = prices[r.ticker].pct_change(20).iloc[-1] if r.ticker in prices.columns else 0
             p60 = prices[r.ticker].pct_change(60).iloc[-1] if r.ticker in prices.columns and len(prices) > 60 else 0
             row = {"Rank": r.rs_rank, "Industry": f"{r.ticker} ({r.name})",
                    "Parent": _parent_label(r.parent_sector), "20d Trend": spark,
-                   "Perf 5d": f"{p5:+.2%}", "Perf 20d": f"{p20:+.2%}", "Perf 60d": f"{p60:+.2%}",
+                   "Perf 1d": f"{p1:+.2%}", "Perf 5d": f"{p5:+.2%}", "Perf 20d": f"{p20:+.2%}", "Perf 60d": f"{p60:+.2%}",
                    "Composite": f"{r.industry_composite:.1f}"}
         row.update({
             "#Sector": f"#{r.rs_rank_within_sector}",
@@ -138,8 +148,16 @@ def render_industry_panel(result: dict):
     hm_groups = []
     for r in display_sorted:
         state = state_map.get(r.ticker)
+        # Compute 1d RS for heatmap
+        rs_1d_hm = 0.0
+        if r.ticker in prices.columns and "SPY" in prices.columns and len(prices) >= 2:
+            sec_1d = prices[r.ticker].pct_change(1).iloc[-1]
+            spy_1d = prices["SPY"].pct_change(1).iloc[-1]
+            if pd.notna(sec_1d) and pd.notna(spy_1d):
+                rs_1d_hm = sec_1d - spy_1d
         hm_groups.append({
             "ticker": r.ticker, "name": r.name,
+            "rs_1d": rs_1d_hm,
             "rs_5d": r.rs_5d, "rs_20d": r.rs_20d, "rs_60d": r.rs_60d,
             "rs_vs_parent": r.rs_20d_vs_parent,
             "state": state.state.value if state else "—",
