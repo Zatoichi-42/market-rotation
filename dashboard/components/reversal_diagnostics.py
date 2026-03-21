@@ -58,7 +58,7 @@ def render_reversal_diagnostics(result: dict):
     # Pillar breakdown for the most fragile
     top = sorted_rev[0]
     st.caption(
-        f"**{top.ticker}** — Breadth Det: {top.breadth_det_pillar:.0f}/100, "
+        f"**{top.ticker} ({top.name})** — Breadth Det: {top.breadth_det_pillar:.0f}/100, "
         f"Price Break: {top.price_break_pillar:.0f}/100, "
         f"Crowding: {top.crowding_pillar:.0f}/100"
     )

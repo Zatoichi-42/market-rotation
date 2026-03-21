@@ -113,6 +113,8 @@ def _render_open_calls(calls: list, result: dict):
 
     for c in open_calls:
         ticker = c.ticker if hasattr(c, 'ticker') else c.get("ticker", "?")
+        name = c.name if hasattr(c, 'name') else c.get("name", "")
+        label = f"{ticker} ({name})" if name else ticker
         target = c.target_pct if hasattr(c, 'target_pct') else c.get("target_pct", 0)
         conf = c.confidence if hasattr(c, 'confidence') else c.get("confidence", 0)
         date = c.date if hasattr(c, 'date') else c.get("date", "?")
@@ -121,10 +123,9 @@ def _render_open_calls(calls: list, result: dict):
         pattern = c.horizon_pattern if hasattr(c, 'horizon_pattern') else c.get("horizon_pattern", "?")
 
         direction = "Long" if target > 0 else "Short" if target < 0 else "Flat"
-        pnl_color = "#6b7280"
 
         st.markdown(
-            f"**{ticker}** {direction} {target:+d}% | "
+            f"**{label}** {direction} {target:+d}% | "
             f"Entry ${entry_price:.2f} on {date} | "
             f"State: {state} | Pattern: {pattern} | "
             f"Conf: {conf}",
@@ -144,6 +145,8 @@ def _render_recent_closed(calls: list):
 
     for c in recent:
         ticker = c.ticker if hasattr(c, 'ticker') else c.get("ticker", "?")
+        name = c.name if hasattr(c, 'name') else c.get("name", "")
+        label = f"{ticker} ({name})" if name else ticker
         reason = c.close_reason if hasattr(c, 'close_reason') else c.get("close_reason", "?")
         pnl = c.pnl_10d if hasattr(c, 'pnl_10d') else c.get("pnl_10d")
         target = c.target_pct if hasattr(c, 'target_pct') else c.get("target_pct", 0)
@@ -151,4 +154,4 @@ def _render_recent_closed(calls: list):
         pnl_str = f"{pnl:+,.0f}" if pnl is not None else "pending"
         direction = "Long" if target > 0 else "Short" if target < 0 else "Flat"
 
-        st.caption(f"{ticker} {direction} {target:+d}% | P&L(10d): {pnl_str} | Reason: {reason}")
+        st.caption(f"{label} {direction} {target:+d}% | P&L(10d): {pnl_str} | Reason: {reason}")

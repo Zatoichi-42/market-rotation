@@ -25,13 +25,19 @@ def render_exit_panel(result: dict):
         st.info("No open positions to monitor.")
         return
 
+    # Build name lookup from trade states
+    trade_states = result.get("trade_states", {})
+    _names = {t: ts.name for t, ts in trade_states.items() if hasattr(ts, "name")}
+
     st.subheader("Exit Monitor")
     for ticker, ea in exit_assessments.items():
         if not ea.signals:
             continue
         icon, color = _URGENCY_STYLE.get(ea.urgency, ("", "#6b7280"))
+        name = _names.get(ticker, "")
+        label = f"{ticker} ({name})" if name else ticker
         st.markdown(
-            f"**{ticker}** — {icon} {ea.recommendation} "
+            f"**{label}** — {icon} {ea.recommendation} "
             f"({len(ea.signals)} signal{'s' if len(ea.signals) > 1 else ''})",
         )
         for sig in ea.signals:

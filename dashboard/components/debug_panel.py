@@ -77,7 +77,7 @@ def render_debug_panel(result: dict):
             sc = result["states"][ticker]
             col1, col2 = st.columns([1, 3])
             with col1:
-                st.markdown(f"**{sc.ticker}** — {sc.state.value}")
+                st.markdown(f"**{sc.ticker} ({sc.name})** — {sc.state.value}")
                 st.caption(f"Confidence: {sc.confidence}% | Sessions: {sc.sessions_in_state} | Pressure: {sc.transition_pressure.value}")
             with col2:
                 st.markdown(

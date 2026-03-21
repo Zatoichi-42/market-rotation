@@ -8,6 +8,16 @@ import math
 import streamlit as st
 import pandas as pd
 import numpy as np
+
+_TICKER_NAMES = {
+    "XLK": "Technology", "XLV": "Health Care", "XLF": "Financials",
+    "XLE": "Energy", "XLI": "Industrials", "XLU": "Utilities",
+    "XLRE": "Real Estate", "XLC": "Comm Services",
+    "XLY": "Cons Disc", "XLP": "Cons Staples", "XLB": "Materials",
+    "SMH": "Semis", "IGV": "Software", "XBI": "Biotech", "KRE": "RegBanks",
+    "XOP": "Oil E&P", "OIH": "OilSvc", "GDX": "Gold", "SIL": "Silver",
+    "XHB": "Homebuild", "XRT": "Retail", "VNQ": "REITs",
+}
 import yfinance as yf
 
 
@@ -115,7 +125,7 @@ def compute_valuation_flags(
                     "ticker": ticker, "field": "P/E",
                     "current": pe, "avg_5yr": avgs["pe_avg"], "std_5yr": avgs["pe_std"],
                     "sigma": round(sigma, 1), "direction": direction,
-                    "message": f"{ticker} P/E ({pe:.1f}) is {abs(sigma):.1f}σ {direction.upper()} 5yr avg ({avgs['pe_avg']:.0f}) — {lang}",
+                    "message": f"{ticker} ({_TICKER_NAMES.get(ticker, '')}) P/E ({pe:.1f}) is {abs(sigma):.1f}σ {direction.upper()} 5yr avg ({avgs['pe_avg']:.0f}) — {lang}",
                 })
 
         # Check Fwd P/E
@@ -129,7 +139,7 @@ def compute_valuation_flags(
                     "ticker": ticker, "field": "Fwd P/E",
                     "current": fwd_pe, "avg_5yr": avgs["fwd_pe_avg"], "std_5yr": avgs["fwd_pe_std"],
                     "sigma": round(sigma, 1), "direction": direction,
-                    "message": f"{ticker} Fwd P/E ({fwd_pe:.1f}) is {abs(sigma):.1f}σ {direction.upper()} 5yr avg ({avgs['fwd_pe_avg']:.0f}) — {lang}",
+                    "message": f"{ticker} ({_TICKER_NAMES.get(ticker, '')}) Fwd P/E ({fwd_pe:.1f}) is {abs(sigma):.1f}σ {direction.upper()} 5yr avg ({avgs['fwd_pe_avg']:.0f}) — {lang}",
                 })
 
     return flags
