@@ -227,6 +227,15 @@ def generate_executive_briefing(
         if desc:
             situation_lines.append(desc)
 
+    # Crisis alignment note when actionable buys exist during crisis
+    has_buys = any(t >= 15 for t in sector_targets.values())
+    if has_buys and any(ct not in (CrisisType.NONE,) for ct in crisis_types):
+        situation_lines.append(
+            "Crisis alignment is active — the system has identified sector-specific "
+            "winners and losers within this crisis, enabling targeted positioning "
+            "rather than blanket risk reduction."
+        )
+
     sections.append("THE SITUATION")
     sections.append("\n".join(situation_lines))
 
@@ -296,7 +305,12 @@ def generate_executive_briefing(
             risk_lines.append(f"CAUTION: {_tn(ticker, names)} rotation ending. Tighten stops or take profits.")
 
     sections.append("KEY RISKS")
-    sections.append("\n".join(risk_lines) if risk_lines else "No elevated risk signals at this time.")
+    if len(risk_lines) > 5:
+        visible = risk_lines[:5]
+        visible.append(f"(+{len(risk_lines) - 5} more risk items — see Regime Gate tab for details)")
+        sections.append("\n".join(visible))
+    else:
+        sections.append("\n".join(risk_lines) if risk_lines else "No elevated risk signals at this time.")
 
     # ── HORIZON CHECK ──────────────────────────────────
     horizon_lines = []

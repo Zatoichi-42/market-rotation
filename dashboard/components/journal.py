@@ -40,16 +40,31 @@ def _render_summary(summary: JournalSummary):
             unsafe_allow_html=True,
         )
 
-    # Hit rates
+    # Hit rates — check if any calls have settled 10d data
+    has_settled_10d = any(
+        (c.hit_10d if hasattr(c, 'hit_10d') else c.get("hit_10d")) is not None
+        for c in journal_calls
+    ) if journal_calls else False
+    has_settled_20d = any(
+        (c.hit_20d if hasattr(c, 'hit_20d') else c.get("hit_20d")) is not None
+        for c in journal_calls
+    ) if journal_calls else False
+
     col1, col2 = st.columns(2)
     with col1:
-        hr10 = summary.hit_rate_10d * 100
-        st.markdown(f"**Hit Rate 10d:** {hr10:.1f}%"
-                    f" {'✅' if hr10 > 55 else '⚠️' if hr10 > 45 else '❌'}")
+        if has_settled_10d:
+            hr10 = summary.hit_rate_10d * 100
+            st.markdown(f"**Hit Rate 10d:** {hr10:.1f}%"
+                        f" {'✅' if hr10 > 55 else '⚠️' if hr10 > 45 else '❌'}")
+        else:
+            st.markdown("**Hit Rate 10d:** No settled calls yet")
     with col2:
-        hr20 = summary.hit_rate_20d * 100
-        st.markdown(f"**Hit Rate 20d:** {hr20:.1f}%"
-                    f" {'✅' if hr20 > 55 else '⚠️' if hr20 > 45 else '❌'}")
+        if has_settled_20d:
+            hr20 = summary.hit_rate_20d * 100
+            st.markdown(f"**Hit Rate 20d:** {hr20:.1f}%"
+                        f" {'✅' if hr20 > 55 else '⚠️' if hr20 > 45 else '❌'}")
+        else:
+            st.markdown("**Hit Rate 20d:** No settled calls yet")
 
     # Breakdown by state
     if summary.pnl_by_state:

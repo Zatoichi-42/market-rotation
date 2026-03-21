@@ -404,14 +404,28 @@ def _build_claude_xml(result: dict) -> str:
     # ── Trade States ──
     trade_states = result.get("trade_states", {})
     if trade_states:
+        # Compute targets for each sector
+        _regime_char = result.get("regime_character")
+        _crisis_types = result.get("crisis_types", [])
+        _vix_val = result.get("vix_val", 25.0)
         L.append('  <trade_states description="Dual-column: Analysis State + Trade State. '
-                 'Trade State = what to DO. Entry trigger, invalidation, and size class included.">')
+                 'Trade State = what to DO. target_pct = computed position target (-100 to +100).">')
         for r in rs_readings:
             ts = trade_states.get(r.ticker)
             if ts:
+                _hr = horizon_readings.get(r.ticker)
+                _pat = _hr.pattern if _hr else "No Pattern"
+                _tgt, *_ = compute_target_pct(
+                    ts.analysis_state, ts.confidence,
+                    regime.state.value,
+                    _regime_char.character.value if _regime_char else "Choppy",
+                    _pat.value if hasattr(_pat, 'value') else str(_pat),
+                    vix_level=_vix_val, ticker=r.ticker, crisis_types=_crisis_types,
+                )
                 L.append(f'    <trade ticker="{r.ticker}" name="{X(ts.name)}"'
                          f' analysis="{X(ts.analysis_state.value)}"'
                          f' trade="{X(ts.trade_state.value)}"'
+                         f' target_pct="{_tgt:+d}"'
                          f' confidence="{ts.confidence}"'
                          f' entry="{X(ts.entry_trigger)}"'
                          f' invalidation="{X(ts.invalidation)}"'
