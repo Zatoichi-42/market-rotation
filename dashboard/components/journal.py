@@ -17,12 +17,12 @@ def render_journal_panel(result: dict):
     st.subheader("Trade Journal — Running P&L")
 
     if journal_summary:
-        _render_summary(journal_summary)
+        _render_summary(journal_summary, journal_calls)
     _render_open_calls(journal_calls, result)
     _render_recent_closed(journal_calls)
 
 
-def _render_summary(summary: JournalSummary):
+def _render_summary(summary: JournalSummary, journal_calls: list = None):
     """Render aggregate stats."""
     col1, col2, col3, col4 = st.columns(4)
     with col1:
