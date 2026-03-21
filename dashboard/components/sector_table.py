@@ -149,7 +149,6 @@ def render_sector_table(result: dict):
         # Compute 1d RS
         rs_1d_val = 0.0
         if r.ticker in prices.columns and "SPY" in prices.columns and len(prices) >= 2:
-            import pandas as pd
             sec_1d = prices[r.ticker].pct_change(1).iloc[-1]
             spy_1d = prices["SPY"].pct_change(1).iloc[-1]
             if pd.notna(sec_1d) and pd.notna(spy_1d):
