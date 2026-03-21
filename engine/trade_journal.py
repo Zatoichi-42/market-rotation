@@ -427,6 +427,8 @@ def generate_calls(
         seq = seq_counter[seq_key]
         seq_counter[seq_key] += 1
 
+        is_definitive = market_data.get("is_definitive", False)
+
         call = TradeCall(
             call_id=_make_call_id(ticker, date_str, seq),
             date=date_str,
@@ -459,10 +461,44 @@ def generate_calls(
             rs_120d=rs_120d,
             rs_rank=rs_rank,
             entry_price=entry_price,
+            is_provisional=not is_definitive,
+            timestamp=datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+            current_target_pct=target_pct,
         )
         new_calls.append(call)
 
     return new_calls
+
+
+def mark_calls_definitive(calls: list[TradeCall]) -> list[TradeCall]:
+    """Mark all open provisional calls as definitive (close-of-day confirmation)."""
+    for call in calls:
+        if call.status == "open" and call.is_provisional:
+            call.is_provisional = False
+    return calls
+
+
+def compute_current_targets(
+    current_states: dict[str, TradeStateAssignment],
+    market_data: dict,
+) -> dict[str, int]:
+    """Compute fresh target_pct for all tickers. Used for edge-decay detection."""
+    regime_gate = market_data.get("regime_gate", "NORMAL")
+    regime_character = market_data.get("regime_character", "Choppy")
+    horizon_readings = market_data.get("horizon_readings", {})
+    vix_level = market_data.get("vix_level", 25.0)
+    crisis_types = market_data.get("crisis_types", None)
+
+    targets = {}
+    for ticker, tsa in current_states.items():
+        hr = horizon_readings.get(ticker)
+        pattern = hr.pattern if hr is not None else HorizonPattern.NO_PATTERN
+        target_pct, *_ = compute_target_pct(
+            tsa.analysis_state, tsa.confidence, regime_gate, regime_character,
+            pattern, vix_level=vix_level, ticker=ticker, crisis_types=crisis_types,
+        )
+        targets[ticker] = target_pct
+    return targets
 
 
 # ── Forward returns ──────────────────────────────────────
@@ -578,12 +614,15 @@ def close_calls(
     current_states: dict[str, TradeStateAssignment],
     regime_state,
     current_date: str,
+    current_targets: dict[str, int] | None = None,
 ) -> list[TradeCall]:
     """
     Close open calls when:
     1. Direction flips to opposite (analysis state reversal).
     2. Regime becomes HOSTILE.
     3. 60 sessions have elapsed since the call date.
+    4. Edge decayed: current target dropped below action threshold
+       in same direction, or flipped to opposite sign.
     """
     regime_state = _resolve_enum(regime_state, RegimeState)
     cur_dt = pd.Timestamp(current_date)
@@ -593,6 +632,10 @@ def close_calls(
             continue
 
         close_reason = None
+
+        # Update current_target_pct for live tracking
+        if current_targets and call.ticker in current_targets:
+            call.current_target_pct = current_targets[call.ticker]
 
         # 1. Opposite direction flip
         tsa = current_states.get(call.ticker)
@@ -613,6 +656,18 @@ def close_calls(
         sessions = len(pd.bdate_range(entry_dt, cur_dt)) - 1
         if sessions >= 60:
             close_reason = "60 sessions elapsed"
+
+        # 4. Edge decay: current target below threshold or opposite sign
+        if current_targets and call.ticker in current_targets and not close_reason:
+            cur_tgt = current_targets[call.ticker]
+            if call.direction > 0 and cur_tgt <= 0:
+                close_reason = "Edge decayed (target dropped to zero/negative)"
+            elif call.direction < 0 and cur_tgt >= 0:
+                close_reason = "Edge decayed (target rose to zero/positive)"
+            elif call.direction > 0 and cur_tgt < _MIN_NEW_POSITION:
+                close_reason = f"Edge decayed (target {cur_tgt:+d}% below {_MIN_NEW_POSITION}% threshold)"
+            elif call.direction < 0 and abs(cur_tgt) < _MIN_NEW_POSITION:
+                close_reason = f"Edge decayed (target {cur_tgt:+d}% below threshold)"
 
         if close_reason:
             call.status = "closed"

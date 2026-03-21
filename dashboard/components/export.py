@@ -74,9 +74,21 @@ def _generate_briefing_text(result: dict) -> str:
     gold_div = result.get("gold_divergence_reading")
     vix_val = result.get("vix_val", 20.0)
 
-    # Compute sector targets
+    # Use journal targets when available, compute fresh otherwise
+    journal_calls = result.get("journal_calls", [])
+    journal_targets = {}
+    for c in journal_calls:
+        status = c.status if hasattr(c, 'status') else c.get("status", "")
+        if status == "open":
+            t = c.ticker if hasattr(c, 'ticker') else c.get("ticker", "")
+            tgt = c.target_pct if hasattr(c, 'target_pct') else c.get("target_pct", 0)
+            journal_targets[t] = tgt
+
     sector_targets = {}
     for ticker in _SECTOR_NAMES:
+        if ticker in journal_targets:
+            sector_targets[ticker] = journal_targets[ticker]
+            continue
         ts = trade_states.get(ticker)
         if not ts:
             continue

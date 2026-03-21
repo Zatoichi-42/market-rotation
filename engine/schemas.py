@@ -724,6 +724,11 @@ class TradeCall:
     pair_leg: Optional[str] = None
     pair_counterpart: Optional[str] = None
 
+    # Provisional / definitive tracking
+    is_provisional: bool = True       # True until close-of-day confirms
+    timestamp: Optional[str] = None   # ISO timestamp of call generation
+    current_target_pct: Optional[int] = None  # Latest recomputed target (may differ from entry)
+
 
 @dataclass
 class JournalSummary:

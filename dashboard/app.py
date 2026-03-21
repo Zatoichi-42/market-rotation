@@ -504,8 +504,13 @@ def run_pipeline():
     if spy_prices is not None:
         journal_calls = update_forward_returns(journal_calls, prices, spy_prices, current_date)
 
-    # Close expired/reversed calls
-    journal_calls = close_calls(journal_calls, sector_trade_states, regime.state.value, current_date)
+    # Compute current targets for edge-decay detection
+    from engine.trade_journal import compute_current_targets
+    current_targets = compute_current_targets(sector_trade_states, market_data)
+
+    # Close expired/reversed/decayed calls
+    journal_calls = close_calls(journal_calls, sector_trade_states, regime.state.value,
+                                current_date, current_targets=current_targets)
 
     # Compute summary
     journal_summary = compute_journal_summary(journal_calls)
