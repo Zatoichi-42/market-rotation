@@ -278,6 +278,8 @@ def generate_executive_briefing(
         else:
             avoids.append((ticker, target))
 
+    regime_state_val = regime.state.value if regime else "NORMAL"
+
     if buys:
         action_lines.append("BUY:")
         for ticker, target in buys:
@@ -285,7 +287,8 @@ def generate_executive_briefing(
             state_val = ts.analysis_state.value if ts and hasattr(ts.analysis_state, "value") else str(ts.analysis_state) if ts else "Unknown"
             state_lang = STATE_LANGUAGE.get(state_val, {})
             desc = state_lang.get("description", "")
-            action_lines.append(f"  {_tn(ticker, names)}: target {target:+d}% — {desc}")
+            blocked = " [BLOCKED by regime]" if regime_state_val == "HOSTILE" else ""
+            action_lines.append(f"  {_tn(ticker, names)}: target {target:+d}%{blocked} — {desc}")
 
     if shorts:
         action_lines.append("SHORT (defined-risk put spreads only):")
@@ -294,7 +297,8 @@ def generate_executive_briefing(
             state_val = ts.analysis_state.value if ts and hasattr(ts.analysis_state, "value") else str(ts.analysis_state) if ts else "Unknown"
             state_lang = STATE_LANGUAGE.get(state_val, {})
             desc = state_lang.get("description", "")
-            action_lines.append(f"  {_tn(ticker, names)}: target {target:+d}% — {desc}")
+            blocked = " [BLOCKED by regime]" if regime_state_val == "HOSTILE" else ""
+            action_lines.append(f"  {_tn(ticker, names)}: target {target:+d}%{blocked} — {desc}")
 
     if avoids:
         action_lines.append(f"AVOID ({len(avoids)} sectors with no actionable edge):")
@@ -350,7 +354,13 @@ def generate_executive_briefing(
             meaning = horizon_lang.get("meaning", "")
             implication = horizon_lang.get("implication", "")
             horizon_lines.append(f"{_tn(ticker, names)} [{pattern_val}]: {meaning}")
-            if implication:
+            # Regime-aware implication
+            regime_state_val = regime.state.value if regime else "NORMAL"
+            if regime_state_val == "HOSTILE" and pattern_val in ("Full Confirm", "Rotation In", "Healthy Dip"):
+                horizon_lines.append(f"  -> BLOCKED by {regime_state_val} regime. Would be entry candidate when gate reopens.")
+            elif regime_state_val == "FRAGILE" and pattern_val in ("Full Confirm", "Rotation In", "Healthy Dip"):
+                horizon_lines.append(f"  -> {implication} (Note: FRAGILE regime requires reduced size.)")
+            elif implication:
                 horizon_lines.append(f"  -> {implication}")
 
     sections.append("HORIZON CHECK")

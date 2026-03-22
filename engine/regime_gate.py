@@ -224,6 +224,7 @@ def classify_regime_from_data(
     6 signals: VIX, term structure, breadth, credit, oil, correlation.
     Modifiers applied after: gold/VIX divergence, gold/silver ratio.
     """
+    # 6 base signals (v9 constitution: MOVE and SB-corr ENRICH existing pillars)
     signal_inputs = [
         ("vix", vix_current),
         ("term_structure", vix_current / vix3m_current if not math.isnan(vix3m_current) and vix3m_current != 0 else float("nan")),
@@ -231,8 +232,6 @@ def classify_regime_from_data(
         ("credit", credit_zscore),
         ("oil", oil_zscore),
         ("correlation", correlation_zscore),
-        ("move", move_level),
-        ("sb_correlation", sb_correlation),
     ]
 
     signals = []
@@ -240,6 +239,40 @@ def classify_regime_from_data(
         sig = classify_signal(name, value, thresholds)
         if sig is not None:
             signals.append(sig)
+
+    # Enrichment: MOVE worsens VIX (Risk Appetite) by one level if extreme
+    move_enrich = thresholds.get("move", {}).get("enrich_threshold", 130)
+    if not math.isnan(move_level) and move_level >= move_enrich:
+        for i, sig in enumerate(signals):
+            if sig.name == "vix" and sig.level != SignalLevel.HOSTILE:
+                new_level = SignalLevel.HOSTILE if sig.level == SignalLevel.FRAGILE else SignalLevel.FRAGILE
+                signals[i] = RegimeSignal(
+                    name="vix", raw_value=sig.raw_value, level=new_level,
+                    description=f"{sig.description} [MOVE enrichment: {move_level:.0f} ≥ {move_enrich} → worsened to {new_level.value}]",
+                )
+                break
+
+    # Enrichment: SB-corr worsens correlation by one level if extreme
+    sb_enrich = thresholds.get("sb_correlation", {}).get("enrich_threshold", 0.30)
+    if not math.isnan(sb_correlation) and sb_correlation >= sb_enrich:
+        for i, sig in enumerate(signals):
+            if sig.name == "correlation" and sig.level != SignalLevel.HOSTILE:
+                new_level = SignalLevel.HOSTILE if sig.level == SignalLevel.FRAGILE else SignalLevel.FRAGILE
+                signals[i] = RegimeSignal(
+                    name="correlation", raw_value=sig.raw_value, level=new_level,
+                    description=f"{sig.description} [SB-corr enrichment: {sb_correlation:+.2f} ≥ {sb_enrich} → worsened to {new_level.value}]",
+                )
+                break
+
+    # Log MOVE and SB-corr as informational (no vote, for transparency)
+    if not math.isnan(move_level):
+        signals.append(RegimeSignal(name="move (info)", raw_value=move_level,
+                                    level=SignalLevel.NORMAL,
+                                    description=f"MOVE {move_level:.0f} (enrichment only, no independent vote)"))
+    if not math.isnan(sb_correlation):
+        signals.append(RegimeSignal(name="sb_corr (info)", raw_value=sb_correlation,
+                                    level=SignalLevel.NORMAL,
+                                    description=f"SB-corr {sb_correlation:+.2f} (enrichment only, no independent vote)"))
 
     assessment = classify_regime(signals, thresholds, fred_hy_oas_value=fred_hy_oas_value)
 

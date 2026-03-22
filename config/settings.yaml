@@ -29,11 +29,13 @@ regime:
     normal_min_zscore: -0.5
     fragile_min_zscore: -1.5
   move:
-    fragile_min: 110
-    hostile_min: 130
+    enrich_threshold: 130    # MOVE above this worsens Risk Appetite by 1 level
+    fragile_min: 110         # For treasury context reporting
+    hostile_min: 130         # For treasury context reporting
   sb_correlation:
-    fragile: 0.15
-    hostile: 0.30
+    enrich_threshold: 0.30   # SB-corr above this worsens Correlation by 1 level
+    fragile: 0.15            # For treasury context reporting
+    hostile: 0.30            # For treasury context reporting
   gate:
     hostile_threshold: 2
     fragile_mixed: true

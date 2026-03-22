@@ -32,7 +32,7 @@ def render_export_button(result: dict):
     st.sidebar.markdown("---")
     st.sidebar.subheader("Export Report")
     fmt = st.sidebar.selectbox("Format",
-                               ["Claude XML", "Markdown", "CSV", "JSON", "ZIP (HTML pages)"],
+                               ["Claude XML", "Markdown", "CSV", "JSON", "ZIP (HTML pages)", "LLM Briefing"],
                                key="export_fmt")
 
     if st.sidebar.button("Generate Export", key="export_btn"):
@@ -57,6 +57,14 @@ def render_export_button(result: dict):
             content = _build_zip_html(result)
             st.sidebar.download_button("Download ZIP", content, f"pump_report_{now}.zip",
                                         mime="application/zip", key="dl_zip")
+        elif fmt == "LLM Briefing":
+            try:
+                from engine.llm_export import generate_llm_briefing
+                llm_content = generate_llm_briefing(result)
+                st.sidebar.download_button("Download LLM Briefing", llm_content,
+                                            f"pump_llm_{now}.txt", mime="text/plain", key="dl_llm")
+            except Exception:
+                pass
 
 
 # ═══════════════════════════════════════════════════════
